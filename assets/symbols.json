@@ -1,0 +1,212 @@
+{
+  "_comment": [
+    "Symbol table for Bubbler+. Storage is Unicode; \"slot\" is where the same",
+    "mark sits in the bundled symbol font, and is the ONLY column that changes",
+    "when the font is replaced. If a replacement face puts its glyphs at real",
+    "Unicode codepoints, set slot === unicode and toFont() becomes a no-op."
+  ],
+  "font": {
+    "family": "VerisurfGDT",
+    "file": "Verisurf.ttf"
+  },
+  "groups": {
+    "common": [
+      {
+        "key": "depth",
+        "slot": "É",
+        "unicode": "↧",
+        "label": "Depth"
+      },
+      {
+        "key": "countersink",
+        "slot": "Ñ",
+        "unicode": "⌵",
+        "label": "Countersink"
+      },
+      {
+        "key": "counterbore",
+        "slot": "Ö",
+        "unicode": "⌴",
+        "label": "Counterbore / spotface"
+      },
+      {
+        "key": "surfaceFinish",
+        "slot": "à",
+        "unicode": "√",
+        "label": "Surface finish"
+      },
+      {
+        "key": "diameter",
+        "slot": ":",
+        "unicode": "⌀",
+        "label": "Diameter"
+      },
+      {
+        "key": "plusMinus",
+        "slot": "]",
+        "unicode": "±",
+        "label": "Plus / minus"
+      },
+      {
+        "key": "degree",
+        "slot": "ä",
+        "unicode": "°",
+        "label": "Degree"
+      },
+      {
+        "key": "square",
+        "slot": "ã",
+        "unicode": "□",
+        "label": "Square"
+      },
+      {
+        "key": "arcLength",
+        "slot": "á",
+        "unicode": "⏜",
+        "label": "Arc length"
+      },
+      {
+        "key": "between",
+        "slot": "Ü",
+        "unicode": "↔",
+        "label": "Between"
+      }
+    ],
+    "gdt": [
+      {
+        "key": "position",
+        "slot": "#",
+        "unicode": "⌖",
+        "label": "Position"
+      },
+      {
+        "key": "perpendicularity",
+        "slot": "&",
+        "unicode": "⟂",
+        "label": "Perpendicularity"
+      },
+      {
+        "key": "flatness",
+        "slot": "[",
+        "unicode": "⏥",
+        "label": "Flatness"
+      },
+      {
+        "key": "runoutCircular",
+        "slot": ";",
+        "unicode": "↗",
+        "label": "Circular runout"
+      },
+      {
+        "key": "runoutTotal",
+        "slot": "\\",
+        "unicode": "⌰",
+        "label": "Total runout"
+      },
+      {
+        "key": "parallelism",
+        "slot": "*",
+        "unicode": "∥",
+        "label": "Parallelism"
+      },
+      {
+        "key": "straightness",
+        "slot": "_",
+        "unicode": "⏤",
+        "label": "Straightness"
+      },
+      {
+        "key": "circularity",
+        "slot": "{",
+        "unicode": "○",
+        "label": "Circularity"
+      },
+      {
+        "key": "concentricity",
+        "slot": "$",
+        "unicode": "◎",
+        "label": "Concentricity"
+      },
+      {
+        "key": "cylindricity",
+        "slot": "}",
+        "unicode": "⌭",
+        "label": "Cylindricity"
+      },
+      {
+        "key": "profileSurface",
+        "slot": "~",
+        "unicode": "⌓",
+        "label": "Profile of a surface"
+      },
+      {
+        "key": "profileLine",
+        "slot": "!",
+        "unicode": "⌒",
+        "label": "Profile of a line"
+      },
+      {
+        "key": "symmetry",
+        "slot": "%",
+        "unicode": "⌯",
+        "label": "Symmetry"
+      },
+      {
+        "key": "angularity",
+        "slot": "^",
+        "unicode": "∠",
+        "label": "Angularity"
+      }
+    ],
+    "modifiers": [
+      {
+        "key": "MMC",
+        "slot": ">",
+        "unicode": "Ⓜ",
+        "label": "Maximum material condition"
+      },
+      {
+        "key": "LMC",
+        "slot": "<",
+        "unicode": "Ⓛ",
+        "label": "Least material condition"
+      },
+      {
+        "key": "PROJECTED",
+        "slot": "?",
+        "unicode": "Ⓟ",
+        "label": "Projected tolerance zone"
+      },
+      {
+        "key": "FREESTATE",
+        "slot": "Ä",
+        "unicode": "Ⓕ",
+        "label": "Free state"
+      },
+      {
+        "key": "TANGENT",
+        "slot": "Å",
+        "unicode": "Ⓣ",
+        "label": "Tangent plane"
+      },
+      {
+        "key": "UNEQUAL",
+        "slot": "â",
+        "unicode": "Ⓤ",
+        "label": "Unequally disposed profile"
+      },
+      {
+        "key": "STATISTICAL",
+        "slot": "Ç",
+        "unicode": "Ⓢ",
+        "label": "Statistical tolerance"
+      },
+      {
+        "key": "DIAMETER",
+        "slot": ":",
+        "unicode": "⌀",
+        "label": "Diameter"
+      }
+    ]
+  }
+}

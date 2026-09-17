@@ -1,0 +1,31 @@
+# Save this file as ".gitignore" in the dev folder (no .txt).
+
+# Dependencies and build output — rebuilt from package-lock.json
+node_modules/
+dist/
+
+# Local settings: holds real share paths, and belongs in %APPDATA%\Bubbler+ now
+config.json
+
+# Third-party font. NOT ours to redistribute — must never enter the history.
+# Remove this line only when the custom GD&T font replaces it.
+assets/Verisurf.ttf
+assets/logo.png
+
+# Stray local data, in case an old copy is still lying around the dev folder
+.bubbler-index/
+recents.json
+recovery.insp
+recovery.json
+
+# Editor and OS noise
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
+*.swp
+
+# Scratch
+*.log
+*.bak
+*.tmp

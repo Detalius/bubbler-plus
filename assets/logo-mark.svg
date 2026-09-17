@@ -1,0 +1,9 @@
+<!-- Icon-sized variant: heavier strokes, no dimension-line tick marks, sized so
+     the balloon still holds its counter at 16-24px. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+  <g fill="none" stroke="currentColor" stroke-linecap="round">
+    <path d="M4.5 19.5h15" stroke-width="1.6" opacity=".55"/>
+    <path d="M12 11.5v5" stroke-width="1.7"/>
+    <circle cx="12" cy="7" r="4.5" stroke-width="1.9"/>
+  </g>
+</svg>
