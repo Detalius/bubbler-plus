@@ -1,6 +1,6 @@
 {
   "name": "bubbler-plus",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Drawing bubbling and inspection packages",
   "author": "Jesiah Handke <jesiah.handke@outlook.com> (https://github.com/Detalius/)",
   "main": "main.js",
