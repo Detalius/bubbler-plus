@@ -1,0 +1,76 @@
+{
+  "name": "bubbler-plus",
+  "version": "0.1.4",
+  "description": "Drawing bubbling and inspection packages",
+  "author": "Jesiah Handke <jesiah.handke@outlook.com> (https://github.com/Detalius/)",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test \"tests/*.test.js\"",
+    "dist": "electron-builder",
+    "postversion": "git push && git push --tags && electron-builder --publish always"
+  },
+  "devDependencies": {
+    "acorn": "^8.15.0",
+    "electron": "^44.1.0",
+    "electron-builder": "^26.15.3"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9",
+    "fflate": "^0.8.3",
+    "konva": "^9.3.16",
+    "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "^4.6.82"
+  },
+  "productName": "Bubbler+",
+  "build": {
+    "appId": "com.detalius.bubblerplus",
+    "productName": "Bubbler+",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer.js",
+      "library.js",
+      "xlsx-append.js",
+      "index.html",
+      "package.json",
+      "assets/**/*",
+      "!node_modules/@napi-rs/**",
+      "!**/*.map",
+      "!**/*.d.ts",
+      "!node_modules/pdfjs-dist/legacy/**",
+      "!node_modules/pdfjs-dist/web/**",
+      "!node_modules/pdfjs-dist/image_decoders/**",
+      "!node_modules/pdfjs-dist/types/**",
+      "!node_modules/pdfjs-dist/cmaps/**",
+      "!node_modules/pdfjs-dist/standard_fonts/**",
+      "!node_modules/pdf-lib/{es,cjs,src,ts3.4}/**"
+    ],
+    "asar": true,
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false
+    },
+    "artifactName": "Bubbler-Plus-Setup-${version}.${ext}",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Detalius",
+        "repo": "bubbler-plus"
+      }
+    ]
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Detalius/bubbler-plus.git"
+  },
+  "license": "MIT"
+}

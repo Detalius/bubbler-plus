@@ -1,0 +1,1212 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Bubbler+</title>
+<style>
+  /* The symbol font. Its GD&T symbols sit in punctuation slots, so it must be
+     applied to any element showing them. */
+  @font-face {
+    font-family: 'VerisurfGDT';
+    src: url('./assets/Verisurf.ttf') format('truetype');
+    font-display: block;
+  }
+  :root {
+    --seg-h: 24px;    /* the dimension cell's GD&T toggle */
+    --bg: #2b2b2b; --panel: #232323; --edge: #3d3d3d; --edge-soft: #353535;
+    --ink: #dcdcdc; --ink-dim: #8d8d8d; --ctl: #383838; --ctl-hi: #464646;
+    --accent: #2d7dd2; --accent-hi: #4a97e6;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 13px/1.45 system-ui, -apple-system, sans-serif;
+         background: var(--bg); color: var(--ink); height: 100vh; overflow: hidden; }
+  button, select, input, textarea { font: inherit; color: var(--ink);
+    background: var(--ctl); border: 1px solid var(--edge); border-radius: 4px; padding: 4px 8px; }
+  button { cursor: pointer; }
+  button:hover:not(:disabled) { background: var(--ctl-hi); }
+  button:disabled { opacity: .38; cursor: default; }
+  .primary { background: var(--accent); border-color: var(--accent-hi); color: #fff; }
+  .primary:hover:not(:disabled) { background: var(--accent-hi); }
+
+  /* ---------------- Launcher ---------------- */
+  /* Semi-transparent, so the workspace shows through. */
+  .lx-back { position: fixed; inset: 0; z-index: 70; display: flex;
+             align-items: center; justify-content: center;
+             background: rgba(0,0,0,.55); }
+  .lx { position: relative; width: 460px; max-height: 88vh; overflow-y: auto;
+        background: var(--panel); border: 1px solid var(--edge); border-radius: 12px;
+        padding: 26px 26px 22px; text-align: center;
+        box-shadow: 0 18px 60px rgba(0,0,0,.6); }
+  .lx .brand { color: var(--accent-hi); }
+  .lx h1 { font-size: 23px; font-weight: 300; letter-spacing: .2em;
+           text-transform: uppercase; margin: 6px 0 0; }
+  .lx h1 .plus { color: var(--accent-hi); }
+  .lx-tag { color: var(--ink-dim); font-size: 12px; margin: 5px 0 20px; }
+
+  /* Two buttons; Quick Find is the primary, wider as well as accented. */
+  .lx-row { display: flex; gap: 11px; align-items: stretch; }
+  .lx-big { flex: 1; display: flex; flex-direction: column; align-items: center;
+            justify-content: center; gap: 7px; padding: 17px 12px; border-radius: 9px;
+            background: var(--ctl); border: 1px solid var(--edge); color: var(--ink); }
+  .lx-big .lbl { font-size: 15px; }
+  .lx-big .sub { font-size: 11px; color: var(--ink-dim); line-height: 1.3; }
+  .lx-big:hover:not(:disabled) { background: var(--ctl-hi); }
+  .lx-big:hover .sub { color: var(--ink); }
+  .lx-big.go { flex: 1.35; background: var(--accent); border-color: var(--accent-hi); color: #fff; }
+  .lx-big.go .sub { color: #d6e8fa; }
+  .lx-big.go:hover:not(:disabled) { background: var(--accent-hi); }
+  .lx-big.go:hover .sub { color: #fff; }
+
+  /* Open is an underlined link, not a button. */
+  .lx-or { margin: 14px 0 0; font-size: 12px; color: var(--ink-dim); }
+  /* Its own class, not .link: button.link carries text-transform: uppercase. */
+  button.or-link { background: none; border: 0; padding: 0; color: var(--ink-dim);
+                   font-size: 12px; text-decoration: underline; }
+  button.or-link:hover:not(:disabled) { background: none; color: var(--ink); }
+  .lx-x { position: absolute; top: 9px; right: 11px; background: none; border: none;
+          color: var(--ink-dim); font-size: 20px; line-height: 1; padding: 2px 6px; }
+  .lx-x:hover { color: var(--ink); background: none; }
+  .lx #recents { margin-top: 20px; text-align: left; }
+
+  /* ---------------- Library ---------------- */
+  #library { height: 100vh; display: grid; grid-template-rows: auto 1fr; }
+  .lib-bar { display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+            border-bottom: 1px solid var(--edge); background: var(--panel); }
+  .lib-bar input { flex: 1; max-width: 520px; padding: 7px 10px; font-size: 14px; }
+  .lib-bar .lib-missing input { flex: 0; }
+  .lib-act { padding: 9px 17px; font-size: 13.5px; border-radius: 7px; }
+  .lib-act:disabled { opacity: .38; }
+  .lib-count { color: var(--ink-dim); font-size: 11.5px; }
+  .lib-missing { color: var(--ink-dim); font-size: 11.5px; display: flex;
+                align-items: center; gap: 5px; cursor: pointer; }
+  .lib-missing input { width: auto; margin: 0; }
+  .lib-card.gone { opacity: .5; }
+  .lib-card.gone .nm::after { content: ' \2014 missing'; color: #d08a70;
+                             font-weight: 400; font-size: 11px; }
+  /* Selected AND missing: the salmon tag all but vanished on the accent blue. */
+  .lib-card.on.gone .nm::after { color: #ffd9cc; }
+  .lib-body { display: grid; grid-template-columns: 260px auto 1fr; min-height: 0; }
+  .lib-results { border-right: 1px solid var(--edge); overflow: auto;
+                background: var(--panel); padding: 8px; }
+  .lib-docs { width: 240px; border-right: 1px solid var(--edge); overflow: auto;
+             background: #202020; padding: 8px; }
+  .lib-card { border: 1px solid var(--edge-soft); border-radius: 5px; padding: 8px 9px;
+             margin-bottom: 6px; cursor: pointer; background: #262626; }
+  .lib-card:hover { border-color: var(--edge); }
+  .lib-card.on { background: var(--accent); border-color: var(--accent-hi); color: #fff; }
+  .lib-card .nm { font-weight: 500; }
+  .lib-card .meta { font-size: 10.5px; color: var(--ink-dim); margin-top: 2px; }
+  .lib-card.on .meta { color: #d6e8fb; }
+  .lib-card .file { font-size: 10.5px; color: var(--ink-dim); margin-top: 1px; opacity: .8;
+                    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lib-card.on .file { color: #d6e8fb; }
+
+  #updBar { position: fixed; right: 16px; bottom: 16px; z-index: 140; max-width: 360px;
+            display: flex; flex-direction: column; gap: 8px; padding: 12px 14px;
+            background: var(--panel); border: 1px solid var(--edge); border-radius: 7px;
+            box-shadow: 0 6px 22px rgba(0,0,0,.45); font-size: 12.5px; }
+  #updBar[hidden] { display: none; }
+  #updBar .txt { display: flex; flex-direction: column; gap: 3px; }
+  #updBar .txt span { color: var(--ink-dim); }
+  #updBar .btns { display: flex; gap: 6px; justify-content: flex-end; }
+  #updBar button { padding: 4px 10px; font-size: 12px; }
+  .lib-group { color: var(--ink-dim); font-size: 10px; text-transform: uppercase;
+              letter-spacing: .08em; margin: 10px 2px 6px; }
+  .lib-group:first-child { margin-top: 0; }
+  .lib-view { display: grid; grid-template-rows: 1fr auto; min-height: 0; background: #1f1f1f; }
+  .lib-scroll { overflow: auto; padding: 14px; min-height: 0; }
+  #libPaper { width: max-content; margin: 0 auto; }
+  .lib-empty { display: flex; align-items: center; justify-content: center;
+              color: #6f6f6f; font-style: italic; }
+  .lib-foot { display: flex; align-items: center; gap: 9px; padding: 8px 12px;
+             border-top: 1px solid var(--edge); background: var(--panel); }
+  .lib-foot .grow { flex: 1; }
+  .lib-foot #libZoom { width: 110px; accent-color: var(--accent); cursor: pointer; }
+  .lib-foot #libPage, .lib-foot #libZoomPct, .lib-foot #libInfo {
+    color: var(--ink-dim); font-family: ui-monospace, monospace; font-size: 11px; }
+
+  /* ---------------- Recent packages ---------------- */
+  /* Fixed height, not max-height, so the launcher doesn't shift as the list
+     fills. */
+  #recents { width: 100%; }
+  .rc-head { display: flex; align-items: baseline; justify-content: space-between;
+             color: var(--ink-dim); font-size: 11px; text-transform: uppercase;
+             letter-spacing: .1em; margin-bottom: 7px; padding: 0 2px; }
+  button.link { background: none; border: 0; padding: 0; color: var(--ink-dim);
+                font-size: 11px; text-transform: uppercase; letter-spacing: .1em; }
+  button.link:hover:not(:disabled) { background: none; color: var(--ink); }
+  #rcList { height: 148px; overflow-y: auto; border: 1px solid var(--edge);
+            border-radius: 7px; background: var(--panel); }
+  .rc-item { display: block; width: 100%; text-align: left; background: none;
+             border: 0; border-bottom: 1px solid var(--edge); border-radius: 0;
+             padding: 9px 12px; }
+  .rc-item:last-child { border-bottom: 0; }
+  .rc-item .t { display: flex; align-items: baseline; gap: 7px; }
+  .rc-item .name { font-size: 13px; color: var(--ink); }
+  .rc-item .rev { font-size: 11px; color: var(--accent-hi); }
+  .rc-item .path { font-size: 10.5px; color: var(--ink-dim); margin-top: 2px;
+                   direction: rtl; text-align: left; white-space: nowrap;
+                   overflow: hidden; text-overflow: ellipsis; }
+  .rc-item.gone .name, .rc-item.gone .rev { color: var(--ink-dim); }
+  .rc-item.gone .path::after { content: ' \2014 not reachable'; direction: ltr; }
+  .rc-empty { padding: 16px 12px; color: var(--ink-dim); font-size: 12px;
+              text-align: center; }
+
+  /* ---------------- App shell ---------------- */
+  #app { height: 100vh; display: grid; grid-template-columns: 78px 1fr 300px; }
+  /* Hiding #panel leaves its 300px track behind, so the track is dropped too. */
+  #app.no-panel { grid-template-columns: 78px 1fr; }
+
+  #rail { background: var(--panel); border-right: 1px solid var(--edge);
+          display: flex; flex-direction: column; padding: 10px 7px; gap: 6px; }
+  .nav { background: none; border: 1px solid transparent; color: var(--ink-dim);
+         display: flex; flex-direction: column; align-items: center; gap: 5px;
+         padding: 10px 3px; font-size: 10px; line-height: 1.2; text-align: center; }
+  .nav:hover { background: var(--ctl); color: var(--ink); }
+  .nav.active { background: var(--ctl); border-color: var(--edge); color: #fff; }
+  .nav.active svg { color: var(--accent-hi); }
+  /* Home sits above the divider and never takes the active state. */
+  .rail-split { height: 1px; background: var(--edge); margin: 4px 6px 8px; }
+  .nav.home { color: var(--ink-dim); }
+  .nav.home:hover { color: var(--ink); }
+  /* The rail's mode swap, pinned to the floor. Never .active. Not mode-*:
+     .mode-btn and .mode-split belong to the GD&T toggle, applied from JS. */
+  .rail-foot { margin-top: auto; }
+  .nav.swap { color: var(--ink-dim); }
+  .nav.swap:hover { color: var(--ink); }
+
+  #center { display: grid; grid-template-rows: auto auto 1fr auto;
+            min-width: 0; min-height: 0; overflow: hidden; }
+
+  #toolbar { display: flex; align-items: center; gap: 6px; padding: 8px 10px;
+             border-bottom: 1px solid var(--edge); background: var(--panel); }
+  .tool { display: flex; align-items: center; gap: 6px; padding: 5px 9px; }
+  .tool.active { background: var(--accent); border-color: var(--accent-hi); color: #fff; }
+  .spacer { flex: 1; }
+
+  /* Per-tool defaults under the toolbar: what a tool creates next, never the
+     selection. */
+  #defaults { display: flex; align-items: center; gap: 14px; padding: 7px 10px;
+              border-bottom: 1px solid var(--edge); background: #262626;
+              overflow-x: auto; }
+  #defaults .field { display: flex; align-items: center; gap: 6px; flex: none; }
+  #defaults .field label { color: var(--ink-dim); font-size: 11.5px; white-space: nowrap; }
+  #defaults input[type=color] { width: 30px; height: 26px; padding: 1px; cursor: pointer; }
+  #defaults input[type=number] { width: 56px; }
+  #defaults input[type=text] { width: 130px; }
+  #defaults .fmts { display: flex; gap: 4px; }
+  #defaults .fmt { width: 28px; padding: 3px 0; }
+  #defaults .fmt.active { background: var(--accent); border-color: var(--accent-hi); color: #fff; }
+  #defaults .divider { width: 1px; height: 22px; background: var(--edge); flex: none; }
+
+  /* min-height:0, or the grid row grows instead of scrolling. Centred with
+     `margin: 0 auto`, not flex: flex centring pushes overflow off the left
+     edge, out of scroll reach. */
+  #viewport { overflow: auto; min-width: 0; min-height: 0; padding: 16px; }
+  #stack { position: relative; display: block; width: fit-content; margin: 0 auto;
+           box-shadow: 0 1px 14px rgba(0,0,0,.45); }
+  #pdfLayer { display: block; }
+  #annoLayer { position: absolute; inset: 0; }
+  #empty { color: var(--ink-dim); display: flex; flex-direction: column;
+           align-items: center; gap: 14px; margin-top: 90px; }
+
+  #pagebar { display: flex; align-items: center; gap: 9px; padding: 7px 12px;
+             border-top: 1px solid var(--edge); background: var(--panel); }
+  #pagebar .mid { flex: 1; display: flex; align-items: center;
+                  justify-content: center; gap: 9px; }
+  #pageLabel { min-width: 62px; text-align: center; color: var(--ink-dim);
+               font-family: ui-monospace, monospace; font-size: 11.5px; }
+  #readout { font-family: ui-monospace, monospace; font-size: 10.5px;
+             color: #7fae6a; min-width: 190px; text-align: right; }
+  #zoomSlider { width: 116px; accent-color: var(--accent); cursor: pointer; }
+  #zoomPct { min-width: 42px; text-align: right; color: var(--ink-dim);
+             font-family: ui-monospace, monospace; font-size: 11px; }
+
+  /* The right rail: the editor grows and scrolls, Drawings pins to the bottom. */
+  #panel { background: var(--panel); border-left: 1px solid var(--edge);
+           display: flex; flex-direction: column; min-height: 0; }
+  #editorSection { flex: 1; min-height: 0; overflow: auto; padding: 12px; }
+  /* Pinned to the bottom of the rail, sized so a few drawings fit without scrolling. */
+  #docsSection { flex: none; border-top: 1px solid var(--edge); background: #202020;
+                 padding: 12px; display: flex; flex-direction: column; }
+  h3 { font-size: 10.5px; text-transform: uppercase; letter-spacing: .09em;
+       color: var(--ink-dim); margin: 0 0 9px; padding-bottom: 6px;
+       border-bottom: 1px solid var(--edge-soft); }
+  section { margin-bottom: 18px; }
+  .row { display: grid; grid-template-columns: 78px 1fr; align-items: center;
+         gap: 8px; margin-bottom: 7px; }
+  .row label { color: var(--ink-dim); font-size: 12px; }
+  .row input, .row textarea, .row select { width: 100%; }
+  .row input[type=color] { padding: 1px; height: 27px; cursor: pointer; }
+  .row textarea { resize: vertical; }
+  .swap { display: flex; align-items: center; gap: 6px; }
+  .swap input[type=checkbox] { width: auto; margin: 0; }
+  .fmts { display: flex; gap: 5px; }
+  .fmt { width: 32px; padding: 4px 0; text-align: center; }
+  .fmt.active { background: var(--accent); border-color: var(--accent-hi); color: #fff; }
+  #noSel { color: #6f6f6f; font-size: 12px; font-style: italic; margin-bottom: 10px; }
+  .doclist { list-style: none; margin: 0 0 8px; padding: 0;
+             border: 1px solid var(--edge-soft); border-radius: 4px; overflow-y: auto;
+             flex: 1; min-height: 130px; max-height: 260px; }
+  .doclist li { display: flex; align-items: center; gap: 8px; padding: 6px 8px;
+                cursor: pointer; border-bottom: 1px solid var(--edge-soft); }
+  .doclist li:last-child { border-bottom: none; }
+  .doclist li:hover { background: var(--ctl); }
+  .doclist li.active { background: var(--accent); color: #fff; }
+  .doclist li.active .meta { color: #d6e8fb; }
+  .doclist .rename { flex: 1; min-width: 0; padding: 1px 5px; font-size: 12px; }
+  .doclist .name { flex: 1; min-width: 0; overflow: hidden;
+                   text-overflow: ellipsis; white-space: nowrap; }
+  .doclist .meta { color: var(--ink-dim); font-size: 10.5px;
+                   font-family: ui-monospace, monospace; }
+  .doclist .empty-note { color: #6f6f6f; font-style: italic; cursor: default; }
+  .doclist .empty-note:hover { background: none; }
+  .doc-actions { display: flex; gap: 6px; }
+  .doc-actions button { flex: 1; font-size: 12px; }
+  .hint { color: #6f6f6f; font-size: 11.5px; margin: 7px 0 0; }
+  kbd { background: var(--ctl); border: 1px solid var(--edge); border-bottom-width: 2px;
+        border-radius: 3px; padding: 0 4px; font-family: ui-monospace, monospace; font-size: 10.5px; }
+  details { margin-top: 4px; }
+  summary { cursor: pointer; color: var(--ink-dim); font-size: 10.5px;
+            text-transform: uppercase; letter-spacing: .09em; }
+  pre { font-family: ui-monospace, monospace; font-size: 10.5px; white-space: pre-wrap;
+        background: #191919; padding: 8px; border-radius: 4px; max-height: 260px; overflow: auto; }
+
+  /* ---------------- Dimensions ---------------- */
+  #page-dimensions { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+  .dim-head { display: flex; align-items: baseline; gap: 12px;
+              padding: 14px 18px 10px; border-bottom: 1px solid var(--edge); }
+  .dim-head h2 { margin: 0; font-size: 17px; font-weight: 500; }
+  .dim-count { color: var(--ink-dim); font-size: 12px; }
+  .sym-menu { font-family: 'VerisurfGDT', system-ui, sans-serif;
+              font-size: 13px; padding: 7px 14px; border-radius: 6px;
+              background: var(--accent); border-color: var(--accent-hi); color: #fff; }
+  .sym-menu:hover { background: var(--accent-hi); }
+  .hdr-in { width: 128px; }
+  .dim-left { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+  .dim-tools { display: flex; justify-content: flex-end; align-items: center;
+               gap: 10px; padding: 8px 18px 0; }
+  .unit-toggle { margin-left: 10px; display: inline-flex; border: 1px solid var(--edge);
+                 border-radius: 6px; overflow: hidden; }
+  .unit-btn { border: none; border-radius: 0; background: var(--ctl); color: var(--ink-dim);
+              padding: 7px 20px; font-size: 13px; font-weight: 500; letter-spacing: .04em;
+              border-right: 1px solid var(--edge); }
+  .unit-btn:last-child { border-right: none; }
+  .unit-btn:hover { background: var(--ctl-hi); color: var(--ink); }
+  .unit-btn.on { background: var(--accent); color: #fff; }
+  #dimTable.mm thead th#dimColHead { color: #8fc7f5; }
+
+  /* A collapsed preview drops its track: a zero-width one keeps its border and
+     min-width. */
+  .dim-split.no-preview { grid-template-columns: 1fr; }
+  .sh-split.no-preview { grid-template-columns: 210px 1fr; }
+  .no-preview > .dim-preview, .no-preview > .sh-preview { display: none; }
+  .prev-toggle { border: 1px solid var(--edge); background: transparent;
+                 color: var(--ink-dim); border-radius: 6px; padding: 0 10px;
+                 height: 26px; font-size: 11.5px; }
+  .prev-toggle:hover { border-color: var(--ink-dim); color: var(--ink); }
+  .prev-toggle.on { border-color: var(--accent-hi); color: var(--accent-hi); }
+
+  .dim-split { flex: 1; min-height: 0; display: grid;
+               grid-template-columns: minmax(420px, 1fr) minmax(320px, 44%); }
+  .dim-scroll { flex: 1; min-height: 0; overflow: auto; padding: 8px 18px 18px; }
+
+  /* Fixed layout, so a long callout ellipsizes instead of widening its column. */
+  /* The min-width floor makes .dim-scroll scroll: without it, the one unsized
+     column (the rendered callout) shrinks to zero in a narrow window. */
+  #dimTable { width: 100%; min-width: 900px; table-layout: fixed;
+              border-collapse: collapse; font-size: 12.5px; }
+  #dimTable thead th { position: sticky; top: 0; z-index: 1; text-align: left;
+                       background: #262626; color: var(--ink-dim); font-weight: 500;
+                       font-size: 11px; text-transform: uppercase; letter-spacing: .05em;
+                       padding: 9px 8px; border-bottom: 1px solid var(--edge); }
+  #dimTable td { padding: 6px 8px; border-bottom: 1px solid var(--edge-soft);
+                 vertical-align: top; }
+  #dimTable input[type=number] { -moz-appearance: textfield; appearance: textfield; }
+  #dimTable input[type=number]::-webkit-outer-spin-button,
+  #dimTable input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  #dimTable tbody tr:hover { background: #262626; }
+  #dimTable input { background: var(--ctl); border: 1px solid var(--edge);
+                    border-radius: 3px; color: var(--ink); padding: 3px 5px; font: inherit; }
+  #dimTable input.symtext, input.symtext {
+    font-family: 'VerisurfGDT', Arial, sans-serif; font-size: 13px; }
+  #dimTable input:focus { outline: 1px solid var(--accent); border-color: var(--accent); }
+  #dimTable td.num-cell { vertical-align: top; text-align: right;
+                          font-family: ui-monospace, monospace; color: #ffffff;
+                          font-size: 15px; font-weight: 600; padding-right: 4px;
+                          padding-top: 6px; }
+  #dimTable tr.main-row td { border-bottom: none; }
+  #dimTable tr.sub-row td { border-bottom: none; }
+  #dimTable tr.main-row:not(:first-child) td { border-top: 1px solid var(--edge-soft); }
+  #dimTable tbody tr.main-row:hover td, #dimTable tbody tr.sub-row:hover td { background: #262626; }
+
+  /* The +/− column, padded to sit level with the input row. */
+  #dimTable td.act-cell { padding: 6px 2px 6px 6px; text-align: center; }
+  .sub-btn { width: 24px; padding: 1px 0; text-align: center; line-height: 1.5;
+             font-size: 14px; color: var(--ink-dim); }
+  .sub-btn:hover { background: var(--ctl-hi); color: var(--ink); }
+
+  .mode-btn { height: var(--seg-h); flex: none; padding: 0 8px; border-radius: 4px;
+              background: transparent; border: 1px solid var(--edge);
+              color: var(--ink-dim); font-size: 10.5px; letter-spacing: .04em; }
+  .mode-btn:hover { border-color: var(--ink-dim); color: var(--ink); }
+  .mode-btn.on { background: transparent; border-color: var(--accent-hi);
+                 color: var(--accent-hi); font-weight: 600; }
+  .mode-split { width: 1px; align-self: stretch; flex: none; margin: 0 3px;
+                background: var(--edge); }
+
+  .tol-inputs { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+  .tol-inputs input.dim { width: 150px; flex: none; }
+  /* Fills the column, so a text dimension and a GD&T frame line up. */
+  .tol-inputs input.dim.wide { flex: 1; width: auto; min-width: 0; }
+  .tol-inputs input.gdt { width: 218px; flex: none;
+                          font-family: ui-monospace, monospace; }
+  /* The rendered callout, padded to sit level with the input row. */
+  #dimTable td.render { padding-top: 9px; overflow: hidden; }
+  .spec-render { font-family: 'VerisurfGDT', Arial, sans-serif; font-size: 14px;
+                 color: #fff; min-height: 19px; white-space: nowrap;
+                 overflow: hidden; text-overflow: ellipsis; }
+  .spec-render.empty { color: #5f5f5f; font-family: inherit; font-size: 12px; }
+
+  #dimTable td.method input, #dimTable td.notes input { width: 100%; }
+  .dim-empty { color: #6f6f6f; font-style: italic; padding: 24px 4px; }
+
+  /* Read-only reference view of the bubbled drawing. */
+  .dim-preview { border-left: 1px solid var(--edge); background: #1f1f1f;
+                 display: grid; grid-template-rows: 1fr auto; min-width: 0; min-height: 0; }
+  .prev-scroll { overflow: auto; min-height: 0; padding: 12px; }
+  #prevCanvas { display: block; width: fit-content; margin: 0 auto;
+                box-shadow: 0 1px 10px rgba(0,0,0,.5); }
+  .prev-empty { color: #6f6f6f; font-style: italic; text-align: center; margin-top: 60px; }
+  .prev-bar { display: flex; align-items: center; gap: 7px; padding: 7px 10px;
+              border-top: 1px solid var(--edge); background: var(--panel); }
+  .prev-bar select { max-width: 150px; }
+  .prev-bar #prevPage { color: var(--ink-dim); font-family: ui-monospace, monospace;
+                        font-size: 11px; min-width: 54px; text-align: center; }
+  /* The auto margin parks the slider and its percentage at the right edge. */
+  .prev-bar #prevZoom { flex: 0 1 78px; min-width: 44px; margin-left: auto;
+                        accent-color: var(--accent); cursor: pointer; }
+  .prev-bar #prevFind { border: 1px solid var(--edge); background: transparent;
+                        color: var(--ink-dim); border-radius: 6px; padding: 0 9px;
+                        height: 24px; font-size: 11px; white-space: nowrap; }
+  .prev-bar #prevFind:hover { border-color: var(--ink-dim); color: var(--ink); }
+  .prev-bar #prevFind.on { border-color: var(--accent-hi); color: var(--accent-hi); }
+  /* Auto-Find's motion setting, beside its switch. */
+  .prev-bar #prevMotion { border: 1px solid var(--edge); background: transparent;
+                          color: var(--ink-dim); border-radius: 6px;
+                          padding: 0 7px; height: 24px; }
+  .prev-bar #prevMotion svg { display: block; }
+  .prev-bar #prevMotion:hover:not(:disabled) { border-color: var(--ink-dim); color: var(--ink); }
+  .prev-bar #prevMotion.on { border-color: var(--accent-hi); color: var(--accent-hi); }
+  .prev-bar #prevMotion:disabled { opacity: .32; }
+  .prev-bar #prevPct { color: var(--ink-dim); font-family: ui-monospace, monospace;
+                       font-size: 11px; min-width: 38px; text-align: right; }
+
+  /* ---------------- Sheets ---------------- */
+  #page-sheets { min-height: 0; overflow: hidden; }
+  .sh-split { height: 100%; display: grid; min-height: 0;
+              grid-template-columns: 210px minmax(340px, 1fr) minmax(320px, 40%); }
+  .pane-h { display: flex; align-items: center; gap: 8px; padding: 12px 12px 9px;
+            border-bottom: 1px solid var(--edge); }
+  .pane-h h2 { margin: 0; font-size: 13px; font-weight: 500; flex: 1; }
+  .pane-h .mini { padding: 2px 9px; font-size: 15px; line-height: 1.2; }
+  .pill { background: var(--ctl); border: 1px solid var(--edge); border-radius: 10px;
+          padding: 1px 8px; font-size: 10.5px; color: var(--ink-dim); }
+
+  .sh-list { background: var(--panel); border-right: 1px solid var(--edge);
+             display: flex; flex-direction: column; min-height: 0; }
+  #shCards { flex: 1; overflow: auto; padding: 8px; }
+  .sh-card { border: 1px solid var(--edge-soft); border-radius: 5px; padding: 8px 9px;
+             margin-bottom: 6px; cursor: pointer; background: #262626; }
+  .sh-card:hover { border-color: var(--edge); }
+  .sh-card.on { background: var(--accent); border-color: var(--accent-hi); color: #fff; }
+  .sh-card .nm { font-weight: 500; }
+  .sh-card { position: relative; }
+  .sh-card .meta { font-size: 10.5px; color: var(--ink-dim); margin-top: 2px; }
+  /* A fixed box, so the text X and the SVG copy icon come out the same size. */
+  .sh-card .del, .sh-card .dup { position: absolute; top: 5px; opacity: 0;
+                  width: 24px; height: 20px; padding: 0; box-sizing: border-box;
+                  display: grid; place-items: center; font-size: 12px; line-height: 1;
+                  background: var(--ctl); border: 1px solid var(--edge); }
+  .sh-card .del { right: 5px; }
+  /* Left of the X, which keeps the corner. */
+  .sh-card .dup { right: 33px; }
+  .sh-card .dup svg { display: block; }
+  .sh-card:hover .del, .sh-card:hover .dup { opacity: 1; }
+  .sh-card.on .del, .sh-card.on .dup { background: rgba(0,0,0,.25);
+                  border-color: rgba(255,255,255,.3); color: #fff; }
+  .sh-card.on .meta { color: #d6e8fb; }
+  .sh-empty { color: #6f6f6f; font-style: italic; font-size: 12px; padding: 14px 4px; }
+
+  .sh-editor { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+  .sh-bar { display: flex; align-items: center; gap: 7px; padding: 9px 12px;
+            border-bottom: 1px solid var(--edge); background: var(--panel); flex-wrap: wrap; }
+  .sh-bar .grow { flex: 1; }
+  .sh-bar input.nm { width: 132px; }
+  /* The selection bar, between the sheet header and the rows it acts on. */
+  .sh-selbar { display: flex; align-items: center; gap: 7px;
+               padding: 7px 12px; border-bottom: 1px solid var(--edge); }
+  .sh-selbar .grow { flex: 1; }
+  .sh-selbar .lbl { color: var(--ink-dim); font-size: 11px;
+                    text-transform: uppercase; letter-spacing: .08em; }
+  .sh-selbar button { padding: 3px 10px; font-size: 11.5px; }
+  .pill.warn { background: #3a2b12; border-color: #6b4a17; color: #f0c070; }
+  #shRows { flex: 1; overflow: auto; padding: 10px 12px 24px; }
+
+  .sh-row { display: flex; align-items: center; gap: 9px; padding: 6px 8px;
+            border-radius: 5px; border: 1px solid transparent; margin-bottom: 3px; }
+  .sh-row:hover { background: #262626; border-color: var(--edge-soft); }
+  .sh-row.drag-over { border-top: 2px solid var(--accent); }
+  .sh-row .grip { color: #6a6a6a; cursor: grab; font-size: 13px; user-select: none; }
+  .sh-row .grip.locked { cursor: default; color: #4d4d4d; }
+  .sh-row input[type=checkbox] { width: auto; margin: 0; cursor: pointer; }
+  .sh-row .num { font-family: ui-monospace, monospace; font-weight: 600; color: #fff;
+                 min-width: 26px; text-align: right; }
+  .sh-row .spec { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+                  white-space: nowrap; font-family: 'VerisurfGDT', Arial, sans-serif; }
+  .sh-row .acts { display: flex; gap: 4px; opacity: 0; }
+  .sh-row:hover .acts { opacity: 1; }
+  .sh-row .acts button { padding: 2px 7px; font-size: 11px; }
+  .sh-row.sub { padding-left: 30px; }
+  .sh-row.sub .num { min-width: 0; }
+  .ovr-chip { font-size: 11px; color: #e8bd6b; background: #3a3020;
+              border: 1px solid #5a4a28; border-radius: 3px; padding: 1px 6px;
+              white-space: nowrap; max-width: 240px; overflow: hidden;
+              text-overflow: ellipsis; }
+
+  .sh-hdr { display: flex; align-items: center; gap: 9px; padding: 7px 8px;
+            margin: 7px 0 3px; background: #202a33; border-left: 3px solid var(--accent);
+            border-radius: 4px; }
+  .sh-hdr input { flex: 1; background: transparent; border: 1px solid transparent;
+                  font-weight: 600; color: #cfe3f5; }
+  .sh-hdr input:focus { background: var(--ctl); border-color: var(--accent); }
+
+  .sh-divider { display: flex; align-items: center; gap: 9px; margin: 14px 0 6px;
+                color: var(--ink-dim); font-size: 11px; cursor: pointer;
+                text-transform: uppercase; letter-spacing: .07em; }
+  .sh-divider::after { content: ''; flex: 1; height: 1px; background: var(--edge); }
+  .sh-divider .caret { font-size: 10px; }
+  .sh-row.excluded { opacity: .45; }
+
+  .sh-preview { background: #1f1f1f; border-left: 1px solid var(--edge);
+                display: grid; grid-template-rows: auto 1fr auto; min-height: 0; min-width: 0; }
+  #shPrevScroll { overflow: auto; min-height: 0; padding: 12px; }
+  #shPaper { width: max-content; }
+  .page-wrap { margin-bottom: 18px; }
+  .page-tag { color: var(--ink-dim); font-size: 10.5px; margin: 0 0 4px 2px;
+              text-transform: uppercase; letter-spacing: .07em; }
+  .prev-bar .grow { flex: 1; }
+  .prev-bar #shZoom { width: 100px; accent-color: var(--accent); cursor: pointer; }
+  .prev-bar #shZoomPct { color: var(--ink-dim); font-family: ui-monospace, monospace;
+                         font-size: 11px; min-width: 36px; text-align: right; }
+
+  /* Printed-sheet replica. Page size, padding, row heights and font sizes are
+     set inline from GEOM in renderer.js; restating any here lets the preview
+     and the PDF drift apart. */
+  .paper { background: #fff; color: #000; font-family: Arial, sans-serif;
+           box-shadow: 0 2px 14px rgba(0,0,0,.5); position: relative; overflow: hidden; }
+  .paper .page-foot { position: absolute; display: flex;
+                      justify-content: space-between; align-items: baseline; color: #000; }
+  .paper .page-foot span:nth-child(2) { flex: 1; text-align: center; }
+  .paper table { border-collapse: collapse; table-layout: fixed; }
+  .paper td { border: 1px solid #000; padding: 0 3px; overflow: hidden;
+              vertical-align: middle; }
+  .paper .ttl { background: #d9d9d9; text-align: center; }
+  .paper .lbl { background: #d9d9d9; white-space: nowrap; }
+  .paper .logo { text-align: center; }
+  .paper .logo img { max-width: 96%; max-height: 92%; object-fit: contain; }
+  /* Label and blank read as one cell. With border-collapse both touching
+     borders have to go. */
+  .paper .ch { background: #d9d9d9; border-left: none; text-align: center; }
+  /* Long labels spill into the blank beside them, in the same grey. The span,
+     not the cell, is lifted: lifting the cell prints a stray border line. */
+  .paper .chl { background: #d9d9d9; border-right: none; text-align: left;
+                font-size: .82em; overflow: visible; white-space: nowrap; }
+  .paper .chl span { position: relative; z-index: 1; }
+  .paper .stub { background: #d9d9d9; text-align: center; }
+  .paper .grp { background: #ededed; font-weight: bold; text-align: left;
+                padding-left: 5px; }
+  .paper .spec { text-align: center; font-family: 'VerisurfGDT', Arial, sans-serif; }
+  .paper .meth { text-align: center; }
+  .paper .n { text-align: center; }
+
+  /* ---------------- Inspect ---------------- */
+  #page-inspect { min-height: 0; overflow: hidden; }
+  .ins-src { color: var(--ink-dim); font-size: 11.5px; }
+  /* Sits below the head block, directly above the rows it labels. */
+  .ins-row.colhead { color: var(--ink-dim); font-size: 10.5px; text-transform: uppercase;
+                     letter-spacing: .07em; border-bottom: 1px solid var(--edge);
+                     border-radius: 0; padding-bottom: 6px; margin-bottom: 4px; }
+  .ins-row.colhead:hover { background: none; border-color: transparent;
+                           border-bottom-color: var(--edge); }
+  .ins-row.colhead .spec { flex: 1; }
+  .ins-row.colhead .lbl { text-transform: uppercase; letter-spacing: .07em; }
+  .ins-row.colhead .cells-label { width: calc(var(--ins-cols, 1) * 62px);
+                                  flex: none; text-align: center; }
+  #inspRows { flex: 1; overflow: auto; padding: 8px 12px 24px; }
+  /* --ins-cols is set by renderInspRows(). --ins-min is the width a row needs
+     (192px of fixed parts + 200px of dimension + the entry columns), so rows
+     scroll rather than crush the dimension. Applied to every direct child so
+     band tags and headers keep pace with the rows. */
+  .sh-editor { --ins-cols: 1;
+               --ins-min: calc(392px + var(--ins-cols, 1) * 62px); }
+  #inspRows > * { min-width: var(--ins-min); }
+  .ins-row { display: flex; align-items: stretch; gap: 9px; padding: 5px 8px;
+             border-radius: 5px; border: 1px solid transparent; }
+  .ins-row:hover { background: #262626; border-color: var(--edge-soft); }
+  .ins-row > * { align-self: center; }
+  .ins-row .num { font-family: ui-monospace, monospace; font-weight: 600; color: #fff;
+                  width: 26px; flex: none; text-align: right; }
+  /* One continuous line bracketing a parent and its subs. */
+  .ins-row .grp-bar { width: 2px; flex: none; align-self: stretch;
+                      border-radius: 1px; background: transparent; }
+  .ins-row .grp-bar.on { background: var(--accent); }
+  .ins-row input.gage { width: 110px; flex: none; }
+  .band-tag { color: var(--accent-hi); font-size: 10.5px; text-transform: uppercase;
+              letter-spacing: .08em; margin: 16px 0 6px; padding-top: 10px;
+              border-top: 1px solid var(--edge); }
+  .band-tag:first-child { margin-top: 0; padding-top: 0; border-top: none; }
+  /* Every row element needs a width rule, or the rows don't line up. */
+  .ins-row .spec, .ins-row .lbl, .ins-row .num,
+  .ins-row .cells-label, .ins-row .ins-cells { flex: none; }
+  .ins-row .spec { flex: 1; min-width: 0; }
+  /* One cell per entry column — five or eight, matching the printed form. */
+  .ins-cells { display: grid; flex: none;
+               grid-template-columns: repeat(var(--ins-cols, 1), minmax(52px, 1fr));
+               gap: 3px; width: calc(var(--ins-cols, 1) * 62px); }
+  .ins-cells input.cell { width: 100%; padding: 3px 4px; text-align: center; }
+  .ins-row .lbl { width: 110px; flex: none; color: var(--ink-dim); font-size: 11.5px;
+                  text-align: right; padding-right: 6px; }
+  .ins-row.head { border-bottom: 1px solid var(--edge-soft); padding-bottom: 6px; }
+  .ins-row.head .spec { flex: 1; }
+  /* The dimension is an input now, so it has to beat the generic width above. */
+  .ins-row input.spec { flex: 1; width: auto; min-width: 0;
+                        font-family: 'VerisurfGDT', Arial, sans-serif; font-size: 13px;
+                        background: transparent; border-color: transparent; }
+  .ins-row input.spec:hover { border-color: var(--edge); }
+  .ins-row input.spec:focus { background: var(--ctl); border-color: var(--accent); }
+  .ins-row.group-end { margin-bottom: 6px; }
+  .ins-row.sub .num { color: var(--ink-dim); }
+  .ins-hdr { padding: 8px 10px; margin: 8px 0 4px; background: #202a33;
+             border-left: 3px solid var(--accent); border-radius: 4px;
+             font-weight: 600; color: #cfe3f5; font-size: 12.5px; }
+  .prev-bar #inspZoom { width: 100px; accent-color: var(--accent); cursor: pointer; }
+  .prev-bar #inspZoomPct { color: var(--ink-dim); font-family: ui-monospace, monospace;
+                           font-size: 11px; min-width: 36px; text-align: right; }
+  #inspCanvas { display: block; width: fit-content; margin: 0 auto;
+                box-shadow: 0 1px 10px rgba(0,0,0,.5); }
+
+  /* ---------------- GD&T builder ---------------- */
+  .gdt-build { display: inline-flex; align-items: center; gap: 4px; flex-wrap: nowrap; }
+  .gdt-build .seg-btn { border: 1px solid var(--edge); border-radius: 4px; flex: none;
+                        background: var(--ctl); color: var(--ink);
+                        font-family: 'VerisurfGDT', serif; font-size: 17px;
+                        line-height: 1; width: 30px; height: 26px; padding: 0;
+                        display: flex; align-items: center; justify-content: center; }
+  .gdt-build .seg-btn:hover { background: var(--ctl-hi); }
+  .gdt-build .sym-btn.set { background: var(--accent); border-color: var(--accent-hi); color: #fff; }
+  .gdt-build .sym-btn.unset { opacity: .35; }
+  .gdt-build .dia-btn { font-size: 15px; opacity: .45; }
+  .gdt-build .dia-btn.on { opacity: 1; background: var(--accent); color: #fff;
+                           border-color: var(--accent-hi); }
+  .gdt-build input.gval  { width: 76px; }
+  .gdt-build input.gdatum { width: 76px; }
+  .gdt-build input.gval, .gdt-build input.gdatum {
+    font-family: 'VerisurfGDT', ui-monospace, monospace; font-size: 13px; }
+  .gdt-build .add-btn { width: 22px; height: 22px; border-radius: 50%;
+                        border: 1px solid var(--accent-hi); background: var(--accent);
+                        color: #fff; font-size: 13px; line-height: 1; padding: 0;
+                        display: flex; align-items: center; justify-content: center; }
+  .gdt-build .add-btn:hover { background: var(--accent-hi); border-color: var(--accent-hi); }
+
+  /* Anchored popups sit ABOVE every overlay, since they open from controls
+     inside modals. Layering, low to high: launcher 70, modals 90, runtime
+     dialogs 120, .gpop 130, .sugg 135. Both close on outside mousedown, Escape
+     or scroll. */
+  .gpop { position: fixed; z-index: 130; background: var(--panel);
+          border: 1px solid var(--edge); border-radius: 7px; padding: 8px;
+          box-shadow: 0 10px 30px rgba(0,0,0,.55); }
+  .gpop .grid { display: grid; gap: 5px; }
+  .gpop .grid.sym { grid-template-columns: repeat(5, 46px); }
+  .gpop .grid.mod { grid-template-columns: repeat(4, 46px); }
+  .gpop .cell { height: 42px; border: 1px solid var(--edge); border-radius: 5px;
+                background: var(--ctl); color: var(--ink); cursor: pointer;
+                font-family: 'VerisurfGDT', serif; font-size: 21px; line-height: 1;
+                display: flex; align-items: center; justify-content: center; }
+  .gpop .cell:hover { background: var(--accent); border-color: var(--accent-hi); color: #fff; }
+  .gpop .cell.on { background: var(--accent); border-color: var(--accent-hi); color: #fff; }
+  /* Text menus: one column of names in the UI font. Must come after .cell. */
+  .gpop .grid.list { grid-template-columns: minmax(150px, 260px); gap: 3px; }
+  .gpop .grid.list .cell { height: auto; display: block; padding: 6px 10px;
+                font-family: inherit; font-size: 12.5px; line-height: 1.3;
+                white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .gpop .ttl { color: var(--ink-dim); font-size: 10.5px; text-transform: uppercase;
+               letter-spacing: .08em; margin: 0 0 6px; }
+  .gpop .clear { width: 100%; margin-top: 6px; font-size: 11.5px; padding: 3px; }
+
+  /* Sheet chooser inside the export dialog. */
+  .pick-list { display: flex; flex-direction: column; gap: 2px; max-height: 260px;
+               overflow-y: auto; border: 1px solid var(--edge); border-radius: 6px;
+               padding: 6px; }
+  .pick-row { display: flex; align-items: center; gap: 9px; padding: 5px 7px;
+              border-radius: 5px; cursor: pointer; font-size: 12.5px; color: var(--ink); }
+  .pick-row:hover { background: var(--ctl-hi); }
+  .pick-row input { accent-color: var(--accent); cursor: pointer; }
+
+  /* Suggestion list. Fixed and on <body>, like .gpop, so the table's clipping
+     container can't cut it off. */
+  .sugg { position: fixed; z-index: 135; background: var(--panel);
+          border: 1px solid var(--edge); border-radius: 6px; padding: 3px;
+          max-height: 206px; overflow-y: auto;
+          box-shadow: 0 10px 30px rgba(0,0,0,.55); }
+  .sugg .opt { padding: 4px 9px; border-radius: 4px; font-size: 12px;
+               color: var(--ink); cursor: pointer; white-space: nowrap; }
+  .sugg .opt:hover { background: var(--ctl-hi); }
+  .sugg .opt.on { background: var(--accent); color: #fff; }
+  .sugg .opt em { font-style: normal; font-weight: 600; color: var(--accent-hi); }
+  .sugg .opt.on em { color: #fff; }
+
+  /* ---------------- Modal ---------------- */
+  #modal, .modal-back { position: fixed; inset: 0; background: rgba(0,0,0,.55);
+           display: flex; align-items: center; justify-content: center; z-index: 90; }
+  .dialog { background: var(--panel); border: 1px solid var(--edge); border-radius: 8px;
+            padding: 20px 22px; width: 430px; box-shadow: 0 14px 44px rgba(0,0,0,.55); }
+  .dialog h2 { margin: 0 0 4px; font-size: 15px; font-weight: 500; }
+  .dialog .sub { color: var(--ink-dim); font-size: 12px; margin: 0 0 16px; }
+  .dialog .row { grid-template-columns: 96px 1fr; }
+  .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+
+  /* ---------------- Runtime dialogs ----------------
+     Built by dialog() in renderer.js; shares .dialog/.actions with the part
+     modal. The tone colours a rule under the title, not the frame. */
+  .dlg-back { position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 120;
+              display: flex; align-items: center; justify-content: center; }
+  .dlg { max-width: calc(100vw - 32px); max-height: calc(100vh - 48px);
+         display: flex; flex-direction: column; }
+  .dlg > h2 { padding-bottom: 9px; border-bottom: 2px solid var(--accent); }
+  .dlg.warn  > h2 { border-bottom-color: #b8862c; }
+  .dlg.danger > h2 { border-bottom-color: #b4483f; }
+  .dlg .sub { margin: 11px 0 0; white-space: pre-line; line-height: 1.45; }
+  .dlg .dlg-body { overflow: auto; min-height: 0; }
+  .dlg .dlg-fields { display: grid; gap: 11px; margin-top: 16px; }
+  .dlg .fld { display: grid; grid-template-columns: 118px 1fr; align-items: center;
+              gap: 10px; }
+  .dlg .fld > label { color: var(--ink-dim); font-size: 12px; }
+  .dlg .fld.wide { grid-template-columns: 1fr; }
+  .dlg .fld .hint { grid-column: 2; color: var(--ink-dim); font-size: 11px;
+                    margin-top: -4px; }
+  .dlg .fld.wide .hint { grid-column: 1; }
+  .dlg .note { margin: 14px 0 0; padding: 9px 11px; border-radius: 5px;
+               background: var(--bg); border-left: 3px solid var(--accent);
+               color: var(--ink-dim); font-size: 11.5px; line-height: 1.45;
+               white-space: pre-line; }
+  .dlg .note.warn { border-left-color: #b8862c; color: #e6c68a; }
+  .dlg .actions button { min-width: 84px; }
+  .dlg .actions .danger { background: #7d332c; border-color: #a4443b; color: #fff; }
+  .dlg .actions .danger:hover:not(:disabled) { background: #a4443b; }
+  .dlg .actions .spread { flex: 1; }
+
+  /* History list. Only the pending (unsaved) row gets the accent. */
+  .hist { margin-top: 12px; }
+  .hist-row { padding: 9px 11px; border-radius: 5px; background: var(--bg);
+              border-left: 3px solid var(--edge); margin-bottom: 6px; }
+  .hist-row.pending { border-left-color: var(--accent); }
+  .hist-head { display: flex; align-items: baseline; gap: 9px; margin-bottom: 5px; }
+  .hist-head .who { color: var(--ink); font-size: 12.5px; font-weight: 600; }
+  .hist-head .when { color: var(--ink-dim); font-size: 11px; }
+  .hist-line { display: flex; gap: 8px; font-size: 11.5px; color: var(--ink-dim);
+               line-height: 1.5; }
+  .hist-line .tag { flex: none; width: 54px; font-size: 10px; letter-spacing: .07em;
+                    text-transform: uppercase; padding-top: 2px; }
+  .hist-line .tag.created { color: #6fbf73; }
+  .hist-line .tag.changed { color: var(--accent-hi); }
+  .hist-line .tag.deleted { color: #d1706a; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+
+<!-- ======================= Launcher ======================= -->
+<!-- Sits OVER the workspace, which stays visible behind it. -->
+<div id="launchBack" class="lx-back" hidden>
+  <div id="launcher" class="lx" role="dialog" aria-modal="true" aria-labelledby="lxTitle">
+    <button id="lxClose" class="lx-x" title="Back to your package" aria-label="Close" hidden>&times;</button>
+    <svg class="brand" viewBox="0 0 120 120" width="58" height="58" fill="none"
+         stroke="currentColor" stroke-linecap="round" aria-hidden="true">
+      <g opacity=".55" stroke-width="4.5"><path d="M26 94h68"/><path d="M26 86v16M94 86v16"/></g>
+      <path d="M60 58v20" stroke-width="5.5"/>
+      <circle cx="60" cy="40" r="21" stroke-width="7"/>
+    </svg>
+    <h1 id="lxTitle">Bubbler<span class="plus">+</span></h1>
+    <p class="lx-tag">Drawing bubbling &amp; inspection packages</p>
+
+    <div class="lx-row">
+      <button class="lx-big" id="lxNew">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+          <path d="M12 5v14M5 12h14"/></svg>
+        <span class="lbl">New</span>
+        <span class="sub">Create a package</span>
+      </button>
+      <button class="lx-big go" id="lxFind">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+          <circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/></svg>
+        <span class="lbl">Quick Find</span>
+        <span class="sub">Open, fill out, or print a package</span>
+      </button>
+    </div>
+
+    <div class="lx-or">or <button class="or-link" id="lxOpen">open a file directly</button></div>
+
+    <div id="recents" hidden>
+      <div class="rc-head">
+        <span>Recent packages</span>
+        <button class="link" id="rcClear">Clear</button>
+      </div>
+      <div id="rcList"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ======================= Library ======================= -->
+<!-- Find a package, then open, inspect or print it from the bar. -->
+<div id="library" hidden>
+  <div class="lib-bar">
+    <button id="libBack" title="Back to the launcher">&#8592;</button>
+    <input id="libSearch" placeholder="Part number, customer, description&hellip;" autocomplete="off">
+    <span class="lib-count" id="libCount"></span>
+    <label class="lib-missing" id="libMissingWrap" hidden>
+      <input type="checkbox" id="libMissing"> show missing
+    </label>
+    <!-- For files the index doesn't cover: off-share packages, record PDFs. -->
+    <button class="or-link" id="libPick">open a file directly</button>
+    <span class="grow"></span>
+    <!-- Always visible; disabled until something is picked. -->
+    <button id="libOpen" class="lib-act" disabled>Open for editing</button>
+
+    <button id="libInspect" class="lib-act" disabled>Inspect</button>
+    <button id="libPrint" class="lib-act primary" disabled>Print&hellip;</button>
+  </div>
+  <div class="lib-body">
+    <div class="lib-results" id="libResults"></div>
+    <div class="lib-docs" id="libDocs" hidden></div>
+    <div class="lib-view" id="libView">
+      <div class="lib-empty" id="libEmpty">Search for a part to begin.</div>
+      <div class="lib-scroll" id="libScroll" hidden><div id="libPaper"></div></div>
+      <div class="lib-foot" id="libFoot" hidden>
+        <span id="libInfo"></span>
+        <span class="grow"></span>
+        <button id="libPrev">&#9664;</button>
+        <span id="libPage">&mdash;</span>
+        <button id="libNext">&#9654;</button>
+        <input type="range" id="libZoom" min="30" max="200" step="5" value="70">
+        <span id="libZoomPct">70%</span>
+        <span class="grow"></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ======================= App ======================= -->
+<div id="app" hidden>
+  <nav id="rail">
+    <button class="nav home" id="railHome" title="Menu">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-linecap="round">
+        <path d="M4.5 19.5h15" stroke-width="1.6" opacity=".55"/>
+        <path d="M12 11.5v5" stroke-width="1.7"/>
+        <circle cx="12" cy="7" r="4.5" stroke-width="1.9"/></svg>
+      Home
+    </button>
+    <div class="rail-split"></div>
+    <button class="nav active" data-page="bubbler">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+        <circle cx="9" cy="9" r="5"/><path d="M13 13l7 7"/></svg>
+      Bubbler
+    </button>
+    <button class="nav" data-page="dimensions">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+        <path d="M3 8h18M3 5v6M21 5v6M3 16h18"/></svg>
+      Dimensions
+    </button>
+    <button class="nav" data-page="sheets">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+        <rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>
+      Sheets
+    </button>
+    <!-- Hidden here as well as in applyRailMode(), so the first paint is right. -->
+    <button class="nav" data-page="inspect" hidden>
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+        <path d="M4 20h4L20 8a2.8 2.8 0 0 0-4-4L4 16z"/><path d="M14 6l4 4"/></svg>
+      Inspect
+    </button>
+    <!-- The mode swap: changes which pages the rail lists for the open package.
+         Not a page, so it never takes the active state. -->
+    <div class="rail-split rail-foot" id="railFoot"></div>
+    <button class="nav swap" id="railMode">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 8.5h13l-3.5-3.5M20 15.5H7l3.5 3.5"/></svg>
+      <span id="railModeLbl">Inspect Mode</span>
+    </button>
+  </nav>
+
+  <main id="center">
+    <!-- ---------- Bubbler page ---------- -->
+    <div id="toolbar">
+      <button class="tool active" data-tool="select">
+        <svg width="13" height="13" viewBox="0 0 16 16"><path d="M3 1l9 7-4 .6 2.2 4.3-1.7.9L6.3 9.4 3 12z"
+          fill="currentColor"/></svg>Select</button>
+      <button class="tool" data-tool="bubble">
+        <svg width="13" height="13" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6"
+          fill="none" stroke="currentColor" stroke-width="1.6"/></svg>Bubble</button>
+      <button class="tool" data-tool="refbubble" title="Reference bubble — annotation only, shares a number with a real bubble">
+        <svg width="13" height="13" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6"
+          fill="none" stroke="currentColor" stroke-width="1.6"
+          stroke-dasharray="2.6 2.2"/></svg>Reference</button>
+      <button class="tool" data-tool="rect">
+        <svg width="13" height="13" viewBox="0 0 16 16"><rect x="2" y="3.5" width="12" height="9"
+          fill="none" stroke="currentColor" stroke-width="1.6"/></svg>Rectangle</button>
+      <button class="tool" data-tool="line">
+        <svg width="13" height="13" viewBox="0 0 16 16"><path d="M2.5 13.5L13.5 2.5"
+          stroke="currentColor" stroke-width="1.6" fill="none"/></svg>Line</button>
+      <button class="tool" data-tool="text">
+        <svg width="13" height="13" viewBox="0 0 16 16"><path d="M3 3h10M8 3v10M6 13h4"
+          stroke="currentColor" stroke-width="1.6" fill="none"/></svg>Text</button>
+      <span class="spacer"></span>
+      <button id="undo" title="Undo (Ctrl+Z)">↶</button>
+      <button id="redo" title="Redo (Ctrl+Shift+Z)">↷</button>
+      <button id="renumber" title="Shift bubble numbers to close or open a gap">Renumber…</button>
+    </div>
+
+    <div id="defaults">
+      <span id="defToolLabel" class="field" style="color:var(--ink-dim); font-size:11.5px;">SELECT — nothing to draw</span>
+
+      <div class="field" id="dfNum" hidden>
+        <label for="dNum2" id="dNumLbl">Next #</label>
+        <input type="number" id="dNum2" min="1" step="1" style="width:52px">
+      </div>
+      <div class="field" id="dfSize" hidden>
+        <label for="dSize2" id="dSizeLbl">Size</label>
+        <input type="number" id="dSize2" min="1" max="200" step="0.5" style="width:52px">
+      </div>
+      <div class="field" id="dfText" hidden>
+        <label for="dText2">Default text</label>
+        <input type="text" id="dText2" placeholder="Text">
+      </div>
+      <div class="field" id="dfFmt" hidden>
+        <div class="fmts">
+          <button class="fmt" id="dBold" title="Bold"><b>B</b></button>
+          <button class="fmt" id="dItalic" title="Italic"><i>I</i></button>
+          <button class="fmt" id="dUnder" title="Underline"><u>U</u></button>
+        </div>
+      </div>
+      <span class="divider" id="dfDiv1" hidden></span>
+      <div class="field" id="dfStroke" hidden>
+        <label for="dStroke2" id="dStrokeLbl">Border</label>
+        <input type="color" id="dStroke2">
+      </div>
+      <div class="field" id="dfWidth" hidden>
+        <label for="dWidth2">Width</label>
+        <input type="number" id="dWidth2" min="0.1" max="20" step="0.1" style="width:52px">
+      </div>
+      <div class="field" id="dfFill" hidden>
+        <label for="dFill2" id="dFillLbl">Fill</label>
+        <input type="color" id="dFill2">
+        <label style="color:var(--ink-dim); font-size:11.5px; display:flex; align-items:center; gap:4px;">
+          <input type="checkbox" id="dNoFill" style="width:auto"> none
+        </label>
+      </div>
+    </div>
+
+    <div id="viewport">
+      <div id="empty">
+        No drawing loaded
+        <button id="loadPdf" class="primary">Choose drawing PDF…</button>
+      </div>
+      <div id="stack" hidden>
+        <canvas id="pdfLayer"></canvas>
+        <div id="annoLayer"></div>
+      </div>
+    </div>
+
+    <div id="pagebar">
+      <span style="min-width:190px"></span>
+      <div class="mid">
+        <button id="prev">◀</button>
+        <span id="pageLabel">— / —</span>
+        <button id="next">▶</button>
+        <select id="scale">
+          <option value="1">100%</option>
+          <option value="1.5" selected>150%</option>
+          <option value="2">200%</option>
+          <option value="3">300%</option>
+        </select>
+        <input type="range" id="zoomSlider" min="50" max="400" step="10" value="150" title="Zoom">
+        <span id="zoomPct">150%</span>
+      </div>
+      <span id="readout"></span>
+    </div>
+
+    <!-- ---------- Dimensions, Sheets and Inspect pages ---------- -->
+    <div id="page-dimensions" hidden style="grid-row:1/5">
+      <div class="dim-head">
+        <h2>Dimensions</h2>
+        <span class="dim-count" id="dimCount"></span>
+      </div>
+      <div class="dim-split">
+        <div class="dim-left">
+          <div class="dim-tools">
+            <button id="symMenu" class="sym-menu" title="Insert symbol">&#x2300; Symbols</button>
+            <div class="unit-toggle" id="unitToggle">
+              <button class="unit-btn on" data-unit="in">inch</button>
+              <button class="unit-btn" data-unit="mm">mm</button>
+            </div>
+            <button class="prev-toggle on" id="dimPrevToggle">Preview</button>
+          </div>
+          <div class="dim-scroll">
+          <table id="dimTable">
+            <thead>
+              <tr>
+                <th style="width:30px" aria-label="Add or remove"></th>
+                <th style="width:44px">#</th>
+                <th id="dimColHead" style="width:360px">Dimension &amp; tolerance</th>
+                <th style="width:130px">Method</th>
+                <th style="width:170px">Notes</th>
+                <th>Rendered</th>
+              </tr>
+            </thead>
+            <tbody id="dimBody"></tbody>
+          </table>
+          <p class="dim-empty" id="dimEmpty" hidden>
+            No characteristics yet. Place a bubble on the Bubbler page and it appears here.
+          </p>
+          </div>
+        </div>
+
+        <div class="dim-preview">
+          <div class="prev-scroll" id="prevScroll">
+            <canvas id="prevCanvas"></canvas>
+            <p class="prev-empty" id="prevEmpty">No drawing loaded</p>
+          </div>
+          <div class="prev-bar">
+            <select id="prevDoc" title="Drawing"></select>
+            <button id="prevBack">◀</button>
+            <span id="prevPage">— / —</span>
+            <button id="prevFwd">▶</button>
+            <button id="prevFind">Find</button>
+            <button id="prevMotion">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+                   stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+                <circle cx="16.5" cy="12" r="4"/>
+                <path d="M2.5 8.5h6M1.5 12h4M2.5 15.5h6"/>
+              </svg>
+            </button>
+            <input type="range" id="prevZoom" min="25" max="300" step="5" value="70" title="Zoom">
+            <span id="prevPct">70%</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="page-sheets" hidden style="grid-row:1/5">
+      <div class="sh-split">
+
+        <div class="sh-list">
+          <div class="pane-h">
+            <h2>Sheets</h2>
+            <button id="shAdd" class="mini primary" title="New sheet">+</button>
+          </div>
+          <div id="shCards"></div>
+        </div>
+
+        <div class="sh-editor">
+          <div class="sh-bar" id="shBar">
+            <input id="shName" class="nm" placeholder="Sheet name">
+            <select id="shStage">
+              <option value="in-process">In-process</option>
+              <option value="first-article">First article</option>
+              <option value="multi-part-fa">Multi-part FA</option>
+              <option value="final">Final / AQL</option>
+            </select>
+            <select id="shOrient">
+              <option value="landscape">Landscape</option>
+              <option value="portrait">Portrait</option>
+            </select>
+            <select id="shUnits" title="Which authored spec this sheet pulls from">
+              <option value="in">Inch specs</option>
+              <option value="mm">Millimetre specs</option>
+            </select>
+            <input id="shAuthor" class="hdr-in" placeholder="Author">
+            <input id="shEdited" class="hdr-in" type="date" title="Last edit date">
+            <span class="grow"></span>
+            <span class="pill warn" id="shUnconv" hidden></span>
+            <button id="shPrint" class="primary">Export PDF</button>
+            <button class="prev-toggle on" id="shPrevToggle">Preview</button>
+          </div>
+          <!-- Over the include checkboxes they act on. -->
+          <div class="sh-selbar" id="shSelBar">
+            <button id="shInvert" title="Include what is excluded and vice versa">Invert</button>
+            <button id="shAllNone" title="Include everything, or nothing">All</button>
+            <span class="lbl" id="shSelCount"></span>
+            <span class="grow"></span>
+          </div>
+          <div id="shRows"></div>
+        </div>
+
+        <div class="sh-preview">
+          <div class="pane-h"><h2>Preview</h2><span class="pill" id="shPages">—</span></div>
+          <div class="prev-scroll" id="shPrevScroll">
+            <div id="shPaper"></div>
+          </div>
+          <div class="prev-bar">
+            <span id="shPrevInfo"></span>
+            <span class="grow"></span>
+            <input type="range" id="shZoom" min="30" max="150" step="5" value="60">
+            <span id="shZoomPct">60%</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <div id="page-inspect" hidden style="grid-row:1/5">
+      <div class="sh-split">
+
+        <div class="sh-list">
+          <div class="pane-h">
+            <h2>Inspections</h2>
+            <button id="inspAdd" class="mini primary" title="New inspection">+</button>
+          </div>
+          <div id="inspCards"></div>
+        </div>
+
+        <div class="sh-editor">
+          <div class="sh-bar" id="inspBar">
+            <input id="inspJob" class="nm" placeholder="Job number">
+            <input id="inspMachine" class="nm" placeholder="Machine / ops">
+            <span class="ins-src" id="inspSrc"></span>
+            <span class="grow"></span>
+            <button id="inspFetch" hidden title="Load the bubbled drawing from the source package">Fetch bubble print</button>
+            <button id="inspOpenPkg" hidden title="Open the full .insp this record came from">Open package</button>
+            <button id="inspPrint" class="primary">Export PDF</button>
+            <button class="prev-toggle on" id="inspPrevToggle">Preview</button>
+          </div>
+          <div id="inspRows"></div>
+        </div>
+
+        <!-- The bubbled drawing, not the sheet: what to measure. -->
+        <div class="sh-preview">
+          <div class="pane-h"><h2>Bubbled drawing</h2><span class="pill" id="inspBubbles">—</span></div>
+          <div class="prev-scroll" id="inspPrevScroll">
+            <canvas id="inspCanvas"></canvas>
+            <p class="prev-empty" id="inspPrevEmpty">No drawing loaded</p>
+          </div>
+          <div class="prev-bar">
+            <select id="inspDoc" title="Drawing"></select>
+            <button id="inspBack">&#9664;</button>
+            <span id="inspPage">&mdash; / &mdash;</span>
+            <button id="inspFwd">&#9654;</button>
+            <span class="grow"></span>
+            <input type="range" id="inspZoom" min="25" max="300" step="5" value="70" title="Zoom">
+            <span id="inspZoomPct">70%</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </main>
+
+  <aside id="panel">
+    <div id="editorSection">
+      <h3>Editor</h3>
+      <div id="noSel">Select an element to edit it here.</div>
+      <div id="editorFields" hidden>
+        <div class="row" id="rowNum">
+          <label for="pNum">Number</label>
+          <input type="number" id="pNum" min="1" step="1">
+        </div>
+        <div class="row" id="rowText">
+          <label for="pText">Text</label>
+          <textarea id="pText" rows="3"></textarea>
+        </div>
+        <div class="row" id="rowFont">
+          <label for="pSize" id="lblSize">Size (pt)</label>
+          <input type="number" id="pSize" min="1" max="200" step="0.5" value="11">
+        </div>
+        <div class="row" id="rowFmt">
+          <label>Format</label>
+          <div class="fmts">
+            <button class="fmt" id="fBold" title="Bold"><b>B</b></button>
+            <button class="fmt" id="fItalic" title="Italic"><i>I</i></button>
+            <button class="fmt" id="fUnder" title="Underline"><u>U</u></button>
+          </div>
+        </div>
+        <div class="row" id="rowStroke">
+          <label for="pStroke" id="lblStroke">Border</label>
+          <input type="color" id="pStroke" value="#c0392b">
+        </div>
+        <div class="row" id="rowWidth">
+          <label for="pWidth">Width (pt)</label>
+          <input type="number" id="pWidth" min="0.1" max="20" step="0.1" value="1.2">
+        </div>
+        <div class="row">
+          <label for="pFill" id="lblFill">Fill</label>
+          <div class="swap">
+            <input type="color" id="pFill" value="#ffffff">
+            <label class="swap" style="color:var(--ink-dim)"><input type="checkbox" id="pNoFill"> none</label>
+          </div>
+        </div>
+        <p class="hint"><kbd>Delete</kbd> removes selection · <kbd>Esc</kbd> deselects</p>
+      </div>
+    </div>
+
+    <div id="docsSection">
+      <h3>Drawings</h3>
+      <ul class="doclist" id="docList"></ul>
+      <div class="doc-actions">
+        <button id="addDoc">+ Add…</button>
+        <button id="removeDoc">Remove</button>
+      </div>
+    </div>
+
+  </aside>
+</div>
+
+<!-- ======================= Drawing Info modal ======================= -->
+<div id="modal" hidden>
+  <div class="dialog">
+    <h2 id="mTitle">Drawing Info</h2>
+    <p class="sub" id="mSub">Describes the part and revision this package covers.</p>
+    <div class="row"><label for="dNum">Part no.</label><input id="dNum" data-doc="number"></div>
+    <div class="row"><label for="dRev">Revision</label><input id="dRev" data-doc="revision"></div>
+    <div class="row"><label for="dName">Name</label><input id="dName" data-doc="name"></div>
+    <div class="row"><label for="dCust">Customer</label><input id="dCust" data-doc="customerName"></div>
+    <div class="row"><label for="dCpn">Cust. P/N</label><input id="dCpn" data-doc="customerPartNumber"></div>
+    <div class="row"><label for="dMat">Material</label><input id="dMat" data-doc="material"></div>
+    <div class="row"><label for="dFin">Finish</label><input id="dFin" data-doc="finish"></div>
+    <div class="actions">
+      <button id="mCancel">Cancel</button>
+      <button id="mOk" class="primary">Continue</button>
+    </div>
+  </div>
+</div>
+
+<input type="file" id="file" accept=".insp,application/pdf" hidden>
+
+<script src="./node_modules/fflate/umd/index.js"></script>
+<script src="./node_modules/konva/konva.min.js"></script>
+<script src="./node_modules/pdf-lib/dist/pdf-lib.min.js"></script>
+<script type="module" src="./renderer.js"></script>
+<script type="module" src="./library.js"></script>
+<!-- Update notice, floating over the bottom-right corner. -->
+<div id="updBar" hidden>
+  <div class="txt"><b id="updTitle">Update available</b><span id="updSub"></span></div>
+  <div class="btns">
+    <button id="updNotes">What's new</button>
+    <button id="updGo" class="primary">Download</button>
+    <button id="updLater">Later</button>
+  </div>
+</div>
+</body>
+</html>
