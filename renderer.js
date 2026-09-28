@@ -1037,7 +1037,7 @@ function applyManifest(m) {
     name: sh.name || 'Sheet',
     stage: sh.stage || 'in-process',
     orientation: sh.orientation || 'landscape',
-    template: storedRef(sh, sh.stage, sh.orientation),
+    template: storedRef(sh, { follow: true }),
     units: sh.units === 'mm' ? 'mm' : 'in',
     author: sh.author ?? '',
     editDate: sh.editDate ?? '',
@@ -1059,7 +1059,7 @@ function applyManifest(m) {
     sheetName: ins.sheetName || '',
     stage: ins.stage || 'in-process',
     orientation: ins.orientation || 'landscape',
-    template: storedRef(ins, ins.stage, ins.orientation),
+    template: storedRef(ins),
     jobNumber: ins.jobNumber || '',
     machine: ins.machine || '',
     author: ins.author || '',
@@ -3822,6 +3822,7 @@ const BUILTIN_TEMPLATES = [IPI_L, IPI_P, MPFA_L, MPFA_P, FAI_L, FAI_P, FINAL_L, 
 const templates = new Map(BUILTIN_TEMPLATES.map(t => [t.id, t]));
 const templatesByHash = new Map(BUILTIN_TEMPLATES.map(t => [templateHash(t), t]));
 const BUILTIN_HASHES = new Set(templatesByHash.keys());
+const BUILTIN_IDS = new Set(templates.keys());
 let templateProblems = [];           // { file, errors[] } for templates left out
 
 // The open package's own templates, by hash, from its templates/ folder.
@@ -3873,25 +3874,37 @@ function templateRefOf(t) {
 const builtinRef = (stage, orientation) => templateRefOf(templates.get(builtinFor(stage, orientation)));
 
 // A reference read from a manifest. Packages from before templates have none,
-// so the built-in their stage and orientation map to stands in.
-const storedRef = (x, stage, orientation) =>
-  readTemplateRef(x?.template) || builtinRef(stage, orientation);
+// so the built-in their stage and orientation map to stands in. With `follow`
+// (sheets), a built-in reference moves to this build's version of it; records
+// keep the exact version they were filled on.
+function storedRef(x, { follow = false } = {}) {
+  const r = readTemplateRef(x?.template);
+  if (!r) return builtinRef(x?.stage, x?.orientation);
+  return follow && BUILTIN_IDS.has(r.id) ? templateRefOf(templates.get(r.id)) : r;
+}
 
-// templates/<hash>.json for every template the package's sheets and records use
-// that isn't built in. Runs on save and autosave.
+// Whether a sheet or record is drawn on the exact version its reference names.
+const onExactTemplate = x =>
+  !!x?.template?.hash && (packageTemplates.has(x.template.hash) || templatesByHash.has(x.template.hash));
+
+// templates/<hash>.json for the templates the package uses. Records carry their
+// exact version even when it's a built-in, so a later release can't reflow
+// them; sheets on a built-in follow the app, so those aren't copied. Runs on
+// save and autosave.
 function templateEntries() {
-  const used = new Set();
-  for (const x of [...sheets, ...inspections]) {
-    const t = templateOf(x);
+  const forSheets = new Set(), forRecords = new Set();
+  const take = (x, into) => {
     // The exact version is missing and a stand-in drew it: keep the reference,
     // write nothing under it.
-    if (x.template?.hash && templateRefOf(t).hash !== x.template.hash) {
+    if (!onExactTemplate(x) && x.template?.hash) {
       console.warn(`Template ${x.template.id} (${x.template.hash}) is missing; kept the reference.`);
-      continue;
+      return;
     }
-    used.add(t);
-  }
-  return packageTemplateFiles(used, BUILTIN_HASHES);
+    into.add(templateOf(x));
+  };
+  sheets.forEach(x => take(x, forSheets));
+  inspections.forEach(x => take(x, forRecords));
+  return { ...packageTemplateFiles(forSheets, BUILTIN_HASHES), ...packageTemplateFiles(forRecords) };
 }
 
 // Reads the package's templates/ folder. Runs when a package opens.
@@ -4474,7 +4487,9 @@ function renderInspRows() {
   $('inspJob').value = ins.jobNumber || '';
   $('inspMachine').value = ins.machine || '';
   $('inspSrc').textContent =
-    `from \u201c${ins.sheetName}\u201d \u00b7 ${ins.orientation} \u00b7 frozen ${(ins.createdUtc || '').slice(0, 10)}`;
+    `from \u201c${ins.sheetName}\u201d \u00b7 ${ins.orientation} \u00b7 frozen ${(ins.createdUtc || '').slice(0, 10)}` +
+    (onExactTemplate(ins) ? ''
+      : ` \u00b7 \u26a0 its form isn\u2019t available here, shown on \u201c${templateOf(ins).name}\u201d`);
 
   // One block per band, stacked as it prints: the check header, the column
   // headers, then the rows.
@@ -4812,7 +4827,9 @@ async function buildRecord(ins) {
     })),
     // Compared against the package's copy to tell whether they still match.
     recordHash: await hashInspection(ins),
-    inspection: inspectionCore(ins)
+    inspection: inspectionCore(ins),
+    // The form it was filled on, so it reprints the same without its package.
+    template: templateOf(ins)
   };
 }
 
@@ -4858,7 +4875,8 @@ let recordSetHash = null;
 
 async function loadRecord(rec) {
   await releaseDocs();
-  packageTemplates = new Map();
+  const carried = rec.template && !validateTemplate(rec.template).length ? rec.template : null;
+  packageTemplates = carried ? new Map([[templateHash(carried), carried]]) : new Map();
   elements = []; sheets = []; activeSheetId = null;
   nextNumber = 1; uid = 1; clearSel(); pageIndex = 0;
   undoStack = []; redoStack = []; updateHistoryButtons();
@@ -4890,6 +4908,7 @@ async function loadRecord(rec) {
     sheetName: ins.sheetName || 'Inspection',
     stage: ins.stage || 'in-process',
     orientation: ins.orientation || 'landscape',
+    template: carried ? templateRefOf(carried) : storedRef(ins),
     jobNumber: ins.jobNumber || '', machine: ins.machine || '',
     author: ins.author || '', editDate: ins.editDate || '',
     ...restoreColumns(ins),          // also migrates any older single-value record
@@ -5497,8 +5516,9 @@ async function fetchBubblePrint() {
     // put back, hashes included, or a second Fetch has nothing to search on.
     const keepIns = inspections, keepId = activeInspId;
     const keepDrawings = recordDrawings, keepHash = recordHash;
-    const keepSetHash = recordSetHash;
+    const keepSetHash = recordSetHash, keepTemplates = packageTemplates;
     await openInsp(buf);              // brings in drawings, bubbles, annotations
+    for (const [hash, t] of keepTemplates) packageTemplates.set(hash, t);
     // openInsp left the package's own inspections in place; that copy is the
     // only chance to compare before it is thrown away.
     const pkgIns = inspections.find(i => i.id === keepId) || null;

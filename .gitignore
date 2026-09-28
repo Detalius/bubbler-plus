@@ -29,3 +29,9 @@ desktop.ini
 *.log
 *.bak
 *.tmp
+
+# Private working notes and tools
+PLAN.md
+MEMORY.md
+comment-style.md
+tools/e2e/
