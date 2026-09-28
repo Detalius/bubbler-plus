@@ -1,6 +1,18 @@
 import * as pdfjsLib from './node_modules/pdfjs-dist/build/pdf.mjs';
 import SYMBOLS from './assets/symbols.json' with { type: 'json' };
 import METHODS from './assets/methods.json' with { type: 'json' };
+import {
+  validateTemplate, checkColumn, headerWidth, bodyWidth, bandCount, paginateRows, fillText,
+  canonicalJson, templateHash, packageTemplateFiles, readPackageTemplates, readTemplateRef
+} from './sheet-template.js';
+import IPI_L from './assets/templates/ipi-landscape.json' with { type: 'json' };
+import IPI_P from './assets/templates/ipi-portrait.json' with { type: 'json' };
+import MPFA_L from './assets/templates/mpfa-landscape.json' with { type: 'json' };
+import MPFA_P from './assets/templates/mpfa-portrait.json' with { type: 'json' };
+import FAI_L from './assets/templates/fai-landscape.json' with { type: 'json' };
+import FAI_P from './assets/templates/fai-portrait.json' with { type: 'json' };
+import FINAL_L from './assets/templates/final-landscape.json' with { type: 'json' };
+import FINAL_P from './assets/templates/final-portrait.json' with { type: 'json' };
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = './node_modules/pdfjs-dist/build/pdf.worker.mjs';
 
@@ -258,7 +270,7 @@ async function confirmAction(message, detail, okLabel = 'OK', opts = {}) {
 // ---------------------------------------------------------------------------
 // Package state
 // ---------------------------------------------------------------------------
-const SCHEMA_VERSION = '0.37.0';
+const SCHEMA_VERSION = '0.38.0';
 // version is a fallback; the real one comes from package.json via main.
 const APP = { name: 'BubblerPlus', version: '0.1.0' };
 window.api?.appVersion?.().then(v => { if (v) APP.version = v; });
@@ -924,6 +936,7 @@ async function buildManifest() {
       sheetName: ins.sheetName || '',
       stage: ins.stage || 'in-process',
       orientation: ins.orientation || 'landscape',
+      template: ins.template,
       jobNumber: ins.jobNumber || '',
       machine: ins.machine || '',
       author: ins.author || '',
@@ -944,6 +957,7 @@ async function buildManifest() {
       name: sh.name,
       stage: sh.stage,
       orientation: sh.orientation,
+      template: sh.template,
       units: sh.units === 'mm' ? 'mm' : 'in',
       author: sh.author || '',
       editDate: sh.editDate || '',
@@ -1023,6 +1037,7 @@ function applyManifest(m) {
     name: sh.name || 'Sheet',
     stage: sh.stage || 'in-process',
     orientation: sh.orientation || 'landscape',
+    template: storedRef(sh, sh.stage, sh.orientation),
     units: sh.units === 'mm' ? 'mm' : 'in',
     author: sh.author ?? '',
     editDate: sh.editDate ?? '',
@@ -1044,6 +1059,7 @@ function applyManifest(m) {
     sheetName: ins.sheetName || '',
     stage: ins.stage || 'in-process',
     orientation: ins.orientation || 'landscape',
+    template: storedRef(ins, ins.stage, ins.orientation),
     jobNumber: ins.jobNumber || '',
     machine: ins.machine || '',
     author: ins.author || '',
@@ -1127,7 +1143,8 @@ async function saveInsp({ saveAs = false } = {}) {
   recordAuditEntry();
   const manifest = await buildManifest();
   const entries = {
-    'manifest.json': new TextEncoder().encode(JSON.stringify(manifest, null, 2))
+    'manifest.json': new TextEncoder().encode(JSON.stringify(manifest, null, 2)),
+    ...templateEntries()
   };
   for (const d of docs) entries[d.file] = new Uint8Array(d.bytes.slice(0));
   const zip = fflate.zipSync(entries, { level: 6 });
@@ -1360,6 +1377,7 @@ async function openInsp(buf) {
 
   const list = manifest.documents || [];
   if (!list.length) throw new Error('Package contains no drawings');
+  loadPackageTemplates(files);
 
   await releaseDocs();
   uid = 1;
@@ -3352,6 +3370,7 @@ function newSheet(name) {
     name: name || `Sheet ${sheets.length + 1}`,
     stage: 'in-process',
     orientation: 'landscape',
+    template: builtinRef('in-process', 'landscape'),
     // Which unit set the rows pull from, per sheet.
     units: 'in',
     author: doc.package.author || '',      // seeded, then edited per sheet
@@ -3787,175 +3806,117 @@ function overrideDialog(sh, it, d) {
   });
 }
 
-// ---- pagination ----
-// Geometry measured against a real page-sized PDF, one set per orientation.
-// Applied inline everywhere: print and screen CSS must not restate any of it,
-// or the preview and the PDF drift apart.
-const GEOM = {
-  portrait: {
-    pageW: 8.5, pageH: 11,
-    cols: [0.2417, 2.2523, 1.0519, 0.9122], group: 0.7009,
-    headerRows: [0.2122, 0.1990, 0.1972, 0.1986, 0.1990],
-    checkRow: 0.1633, dataRow: 0.2117, rows: 41,
-    marginTop: 0.2569, footerUp: 0.128,
-    // Title block sits a point below the body to stop the taller labels clipping.
-    fontTitle: 9.7, fontBody: 8.0, fontHeader: 7.0, fontCheck: 6.0, fontFoot: 7.3
-  },
-  landscape: {
-    pageW: 11, pageH: 8.5,
-    cols: [0.2481, 2.3185, 1.0843, 0.9382], group: 0.7202,
-    headerRows: [0.2171, 0.2035, 0.2028, 0.2042, 0.2035],
-    checkRow: 0.1683, dataRow: 0.2167, rows: 28,
-    marginTop: 0.2565, footerUp: 0.130,
-    fontTitle: 10.0, fontBody: 8.3, fontHeader: 7.3, fontCheck: 6.3, fontFoot: 7.6
-  }
-};
-// The label/blank split inside a check group isn't drawn in the PDF (its border
-// is off), so it's kept at the original 0.29/0.72 proportion.
-const LABEL_FRACTION = 0.29 / 0.72;
-
-const geomFor = o => GEOM[o] || GEOM.landscape;
-function gridWidth(o, nGroups) {
-  const G = geomFor(o);
-  return G.cols.reduce((a, b) => a + b, 0) + nGroups * G.group;
-}
-
-// Straight from the measured forms: 41 rows portrait, 28 landscape.
-const PAGE_ROWS = { portrait: GEOM.portrait.rows, landscape: GEOM.landscape.rows };
-
-// ---- repeated check bands (in-process only) ----
-//
-// Below the title block, an in-process sheet repeats its band (the three-row
-// check header plus the rows) as many times as fits, each adding a set of check
-// columns. Other forms get one band. Band height comes from the measured row
-// count, so banding and pagination agree to the row.
-function bandHeights(orientation) {
-  const G = geomFor(orientation);
-  const rows = PAGE_ROWS[orientation] ?? PAGE_ROWS.landscape;
-  return {
-    available: 3 * G.checkRow + rows * G.dataRow,
-    checkBlock: 3 * G.checkRow,
-    dataRow: G.dataRow,
-    maxRows: rows
-  };
-}
-
-function bandCount(stage, orientation, rowCount) {
-  if (stage !== 'in-process') return 1;          // fixed-entry forms gain nothing
-  if (!rowCount) return 1;
-  const h = bandHeights(orientation);
-  if (rowCount > h.maxRows) return 1;            // doesn't even fit once; paginate
-  const band = h.checkBlock + rowCount * h.dataRow;
-  return Math.max(1, Math.floor((h.available + 1e-6) / band));
-}
-
-// Units are what may not be split across a page: a header, or a characteristic
-// with its included subs (a rowspan cannot cross a page boundary).
-function sheetUnits(sh) {
-  const units = [];
-  const on = sh.items.filter(i => i.type === 'header' || i.include);
-  for (const it of on) {
-    if (it.type === 'header') { units.push({ rows: [it], n: 1 }); continue; }
-    if (it.ref.includes('#')) {
-      const last = units[units.length - 1];
-      if (last && last.rows[0].type === 'characteristic') { last.rows.push(it); last.n++; continue; }
-    }
-    units.push({ rows: [it], n: 1 });
-  }
-  return units;
-}
-
-// Works on any {orientation, rows-or-items} source, so sheets and frozen
-// inspections paginate identically.
-function paginateRows(rows, orientation, stage) {
-  if (bandCount(stage, orientation, rows.length) > 1) return [rows];
-  const cap = PAGE_ROWS[orientation] || PAGE_ROWS.landscape;
-  const units = [];
-  for (const r of rows) {
-    if (r.isSub) {
-      const last = units[units.length - 1];
-      if (last) { last.rows.push(r); last.n++; continue; }
-    }
-    units.push({ rows: [r], n: 1 });
-  }
-  const pages = [];
-  let cur = [], used = 0;
-  for (const u of units) {
-    if (used && used + u.n > cap) { pages.push(cur); cur = []; used = 0; }
-    cur.push(...u.rows);
-    used += u.n;
-  }
-  if (cur.length || !pages.length) pages.push(cur);
-  return pages;
-}
-
+// Pages of a sheet's included items, as its template paginates them.
 function paginate(sh) {
-  const cap = PAGE_ROWS[sh.orientation] || PAGE_ROWS.landscape;
-  const units = sheetUnits(sh);
-  const total = units.reduce((n, u) => n + u.n, 0);
-
-  // A banded sheet is always one page.
-  if (bandCount(sh.stage, sh.orientation, total) > 1) {
-    return [units.flatMap(u => u.rows)];
-  }
-
-  const pages = [];
-  let cur = [], used = 0;
-  for (const u of units) {
-    if (used && used + u.n > cap) { pages.push(cur); cur = []; used = 0; }
-    cur.push(...u.rows);
-    used += u.n;
-  }
-  if (cur.length || !pages.length) pages.push(cur);
-  return pages;
+  const items = sh.items.filter(i => i.type === 'header' || i.include);
+  return paginateRows(items, templateOf(sh), it => it.type === 'characteristic' && it.ref.includes('#'));
 }
 
 // ---------------------------------------------------------------------------
-// Printed form templates
-//
-// The four forms differ in wording and in how the check columns are arranged,
-// not in structure — so they are configuration, not four builders.
-//
-//   headerRight   the four right-hand labels of the header block
-//   checkLabels   the three stacked labels heading each check column
-//   checkMode     'multi'  = one column per inspection pass (8 landscape / 5 portrait)
-//                 'single' = all columns merged into one full-width entry
-//   portraitHidden which check groups drop in portrait, keeping the page to scale
+// Sheet templates (TEMPLATE-FORMAT.md)
 // ---------------------------------------------------------------------------
-const SHEET_TEMPLATES = {
-  'in-process': {
-    title: 'In-Process Inspection (IPI)',
-    headerRight: ['Job Number', 'Machine', 'Last Author', 'Last Edit Date'],
-    checkLabels: ['Date:', 'Initials:', 'OP#:'],
-    checkMode: 'multi',
-    portraitHidden: [1, 5, 6]
-  },
-  'multi-part-fa': {
-    title: 'Multi-Part First Article Inspection (FAI)',
-    headerRight: ['Job Number', 'Machine & OP', 'Last Author', 'Last Edit Date'],
-    checkLabels: ['Date:', 'Initials:', 'Part#:'],
-    checkMode: 'multi',
-    portraitHidden: [1, 5, 6]
-  },
-  // The single-entry forms head their one column with two labels, not three.
-  // The block stays .54in tall either way, so rows per page are unaffected.
-  'first-article': {
-    title: 'First Article Inspection (FAI)',
-    headerRight: ['Job Number', 'Machine & OP', 'Last Author', 'Last Edit Date'],
-    checkLabels: ['Date:', 'Technician:'],
-    checkMode: 'single',
-    portraitHidden: [1, 5, 6]
-  },
-  'final': {
-    title: 'Final Inspection (AQL)',
-    headerRight: ['Job Number', 'Machine & OP', 'Last Author', 'Last Edit Date'],
-    checkLabels: ['Date:', 'Technician:'],
-    checkMode: 'single',
-    portraitHidden: [1, 5, 6]
-  }
-};
-const templateFor = stage => SHEET_TEMPLATES[stage] || SHEET_TEMPLATES['in-process'];
+const BUILTIN_TEMPLATES = [IPI_L, IPI_P, MPFA_L, MPFA_P, FAI_L, FAI_P, FINAL_L, FINAL_P];
 
+// Every usable template by id: the built-ins, then the shop's own from the data
+// folder. A shop template may not reuse a built-in's id.
+const templates = new Map(BUILTIN_TEMPLATES.map(t => [t.id, t]));
+const templatesByHash = new Map(BUILTIN_TEMPLATES.map(t => [templateHash(t), t]));
+const BUILTIN_HASHES = new Set(templatesByHash.keys());
+let templateProblems = [];           // { file, errors[] } for templates left out
+
+// The open package's own templates, by hash, from its templates/ folder.
+let packageTemplates = new Map();
+
+// Runs once at startup.
+async function loadUserTemplates() {
+  if (!window.api?.listTemplates) return;
+  templateProblems = [];
+  for (const { file, text, error } of await window.api.listTemplates()) {
+    let t = null, errors = error ? [error] : [];
+    if (!errors.length) {
+      try { t = JSON.parse(text); } catch (err) { errors = [`not valid JSON: ${err.message}`]; }
+    }
+    if (t && !errors.length) errors = validateTemplate(t);
+    if (t && !errors.length && BUILTIN_TEMPLATES.some(b => b.id === t.id)) {
+      errors = [`id "${t.id}" belongs to a built-in template`];
+    }
+    if (errors.length) { templateProblems.push({ file, errors }); continue; }
+    templates.set(t.id, t);
+    templatesByHash.set(templateHash(t), t);
+  }
+  for (const p of templateProblems) console.warn(`Template ${p.file} left out:`, p.errors);
+}
+
+// The built-in a sheet's stage and orientation map to.
+const BUILTIN_BY_STAGE = {
+  'in-process': 'ipi', 'multi-part-fa': 'mpfa', 'first-article': 'fai', 'final': 'final'
+};
+const builtinFor = (stage, orientation) =>
+  `${BUILTIN_BY_STAGE[stage] || 'ipi'}-${orientation === 'portrait' ? 'portrait' : 'landscape'}`;
+
+// The template a sheet or record prints on: the exact version its reference
+// names (the package's own copy, else one this machine has), else the template
+// with its id, else the built-in its stage and orientation map to. `local` is
+// the package's templates; the Library passes its preview's.
+function templateOf(x, local = packageTemplates) {
+  const ref = x?.template;
+  return local.get(ref?.hash) || templatesByHash.get(ref?.hash) || templates.get(ref?.id)
+      || templates.get(builtinFor(x?.stage, x?.orientation));
+}
+
+const templateHashes = new WeakMap();
+// A stored reference to one exact template version.
+function templateRefOf(t) {
+  if (!templateHashes.has(t)) templateHashes.set(t, templateHash(t));
+  return { id: t.id, hash: templateHashes.get(t) };
+}
+const builtinRef = (stage, orientation) => templateRefOf(templates.get(builtinFor(stage, orientation)));
+
+// A reference read from a manifest. Packages from before templates have none,
+// so the built-in their stage and orientation map to stands in.
+const storedRef = (x, stage, orientation) =>
+  readTemplateRef(x?.template) || builtinRef(stage, orientation);
+
+// templates/<hash>.json for every template the package's sheets and records use
+// that isn't built in. Runs on save and autosave.
+function templateEntries() {
+  const used = new Set();
+  for (const x of [...sheets, ...inspections]) {
+    const t = templateOf(x);
+    // The exact version is missing and a stand-in drew it: keep the reference,
+    // write nothing under it.
+    if (x.template?.hash && templateRefOf(t).hash !== x.template.hash) {
+      console.warn(`Template ${x.template.id} (${x.template.hash}) is missing; kept the reference.`);
+      continue;
+    }
+    used.add(t);
+  }
+  return packageTemplateFiles(used, BUILTIN_HASHES);
+}
+
+// Reads the package's templates/ folder. Runs when a package opens.
+function loadPackageTemplates(files) {
+  const { templates: found, problems } = readPackageTemplates(files);
+  for (const p of problems) console.warn(`Package template ${p.file} left out:`, p.errors);
+  packageTemplates = found;
+}
+
+const isLandscape = t => t.page.size[0] > t.page.size[1];
+
+// part.* bindings, from the open package or, for the Library, a manifest.
+const partBindings = (p = doc.part) => ({
+  customer: p.customerName, number: p.number, name: p.name, revision: p.revision,
+  customerPartNumber: p.customerPartNumber, material: p.material, finish: p.finish
+});
+const partFromManifest = m => ({
+  customer: m?.part?.customer?.name, number: m?.part?.number, name: m?.part?.name,
+  revision: m?.part?.revision, customerPartNumber: m?.part?.customer?.partNumber,
+  material: m?.part?.material, finish: m?.part?.finish
+});
+
+// ---------------------------------------------------------------------------
+// Sheet rows
+// ---------------------------------------------------------------------------
 // The characteristic as this sheet's unit set sees it; notes ride along from
 // the parent. An unauthored alternate returns nothing, never the inch value: a
 // blank on a form gets asked about, an inch number under "mm" does not.
@@ -3993,175 +3954,238 @@ function rowsFromSheet(sh, items) {
 }
 
 // ---------------------------------------------------------------------------
-// One page of any form. Runs for each page of the Sheets preview, the sheet PDF
-// and the record PDF.
-//   ctx = sheetCtx() or inspCtx(): { stage, orientation, bandCount, bands,
-//         jobNumber, machine, author, editDate }
+// One page of any form, drawn from its template. Runs for each page of the
+// Sheets preview, the sheet PDF, the record PDF and the Library's sheet print.
+//   ctx = sheetCtx() or inspCtx(): { template, bandCount, bands, bind }
+//
+// Header and body are centred on the page and share one table, laid on the
+// union of their column edges, so their borders collapse into one grid.
 // ---------------------------------------------------------------------------
-function buildPage(ctx, rows, pageNo, pageCount) {
-  const tpl = templateFor(ctx.stage);
-  const land = ctx.orientation === 'landscape';
-  const groups = land ? [0,1,2,3,4,5,6,7]
-                      : [0,1,2,3,4,5,6,7].filter(i => !tpl.portraitHidden.includes(i));
-  const g = groups.length;
-  const single = tpl.checkMode === 'single';
-  const live = r => r.filter(i => groups.includes(i)).length;
+const SYMBOL_FONT_STACK = "'VerisurfGDT', Arial, sans-serif";
 
-  const G = geomFor(ctx.orientation);
-  const gw = gridWidth(ctx.orientation, g);
-  const side = (G.pageW - gw) / 2;
+// Applies a template style to a page element.
+function styleCell(el, st) {
+  if (!st) return;
+  if (st.fill) el.style.background = st.fill;
+  if (st.size) el.style.fontSize = st.size + 'pt';
+  if (st.bold) el.style.fontWeight = 'bold';
+  if (st.italic) el.style.fontStyle = 'italic';
+  if (st.align) el.style.textAlign = st.align;
+  if (st.wrap === false) el.style.whiteSpace = 'nowrap';
+  if (st.font) el.style.fontFamily = st.font === 'symbol' ? SYMBOL_FONT_STACK : `${st.font}, Arial, sans-serif`;
+}
+
+// Left-to-right edges of `widths`, starting at `from`.
+function edgesOf(widths, from) {
+  const out = [from];
+  for (const w of widths) out.push(out[out.length - 1] + w);
+  return out;
+}
+
+function buildPage(ctx, rows, pageNo, pageCount) {
+  const t = ctx.template;
+  const B = t.body;
+  const [pageW, pageH] = t.page.size;
+  const chk = checkColumn(t);
+  const styleOf = name => (name ? t.styles?.[name] : null);
+  const bind = { ...ctx.bind, page: { number: pageNo, count: pageCount } };
+
+  const hw = headerWidth(t), bw = bodyWidth(t), W = Math.max(hw, bw);
+  const side = (pageW - W) / 2;
+  const hEdges = edgesOf(t.header.columns, (W - hw) / 2);
+
+  // The body's segments: one per ordinary column, and a label and a value per
+  // check. `spans[ci]` is where each body column starts and ends.
+  const segs = [], spans = [];
+  let x = (W - bw) / 2;
+  for (const c of B.columns) {
+    if (c.repeat == null) {
+      segs.push(c.width);
+      spans.push([x, x + c.width]);
+      x += c.width;
+    } else {
+      const checks = [];
+      for (let k = 0; k < c.repeat; k++) {
+        segs.push(c.labelWidth, c.width - c.labelWidth);
+        checks.push([x, x + c.labelWidth, x + c.width]);
+        x += c.width;
+      }
+      spans.push(checks);
+    }
+  }
+  const bEdges = edgesOf(segs, (W - bw) / 2);
+  const bodyFrom = bEdges[0], bodyTo = bEdges[bEdges.length - 1];
+
+  // The shared grid. Edges closer than EPS are one edge.
+  const EPS = 5e-4;
+  const edges = [];
+  for (const e of [...hEdges, ...bEdges].sort((a, b) => a - b)) {
+    if (!edges.length || e - edges[edges.length - 1] > EPS) edges.push(e);
+  }
+  const col = e => edges.findIndex(v => Math.abs(v - e) <= EPS);
 
   const paper = document.createElement('div');
-  paper.className = 'paper ' + (land ? 'landscape' : 'portrait');
-  // Every dimension comes from GEOM.
-  paper.style.width = G.pageW + 'in';
-  paper.style.height = G.pageH + 'in';
-  paper.style.paddingTop = G.marginTop + 'in';
+  paper.className = 'paper ' + (pageW > pageH ? 'landscape' : 'portrait');
+  paper.style.width = pageW + 'in';
+  paper.style.height = pageH + 'in';
+  paper.style.paddingTop = t.page.marginTop + 'in';
   paper.style.paddingLeft = side + 'in';
   paper.style.paddingRight = side + 'in';
-  paper.style.fontSize = G.fontBody + 'pt';
-
-  const t = document.createElement('table');
-
-  // Width is stated, not left to the cells: with border-collapse, merging the
-  // check columns drops internal borders and the grid would come out narrower.
-  t.style.width = gw.toFixed(4) + 'in';
-
-  const lblW = G.group * LABEL_FRACTION;
-  const cg = document.createElement('colgroup');
-  [...G.cols, ...groups.flatMap(() => [lblW, G.group - lblW])]
-    .forEach(w => { const c = document.createElement('col');
-                    c.style.width = w.toFixed(4) + 'in'; cg.appendChild(c); });
-  t.appendChild(cg);
-
-  const cell = (cls, txt, attrs = {}) => {
-    const td = document.createElement('td');
-    if (cls) td.className = cls;
-    td.textContent = txt ?? '';
-    for (const k in attrs) td.setAttribute(k, attrs[k]);
-    return td;
-  };
-  const tr = () => document.createElement('tr');
-
-  const r1 = tr();
-  const logo = cell('logo', logoDataUri ? '' : 'LOGO', { rowspan: 5, colspan: 2 });
-  if (logoDataUri) {
-    const img = document.createElement('img');
-    img.src = logoDataUri;
-    logo.appendChild(img);
+  if (t.font) {
+    paper.style.fontSize = t.font.size + 'pt';
+    paper.style.fontFamily = `${t.font.family}, sans-serif`;
   }
-  const ttl = cell('ttl', tpl.title, { colspan: 2 + g * 2 });
-  ttl.style.fontSize = G.fontTitle + 'pt';
-  ttl.style.height = G.headerRows[0] + 'in';
-  r1.append(logo, ttl);
-  t.appendChild(r1);
 
-  // Author and edit date come from the sheet or record, else the package.
-  const rightVals = [ctx.jobNumber || '', ctx.machine || '',
-                     ctx.author ?? doc.package.author ?? '',
-                     ctx.editDate ?? doc.package.editDate ?? ''];
-  const leftPairs = [['Customer', doc.part.customerName], ['Part Number', doc.part.number],
-                     ['Part Name', doc.part.name], ['Part Revision', doc.part.revision]];
-  leftPairs.forEach(([l, v], i) => {
-    const r = tr();
-    r.append(cell('lbl', l), cell('val', v, { colspan: 1 + live([0,1,2]) * 2 }),
-             cell('lbl', tpl.headerRight[i], { colspan: live([3]) * 2 }),
-             cell('val', rightVals[i], { colspan: live([4,5,6,7]) * 2 }));
-    [...r.children].forEach(td => {
-      td.style.height = G.headerRows[i + 1] + 'in';
-      td.style.fontSize = G.fontHeader + 'pt';
-    });
-    t.appendChild(r);
-  });
+  const table = document.createElement('table');
+  // Width is stated, not left to the cells: with border-collapse, merged
+  // columns drop internal borders and the grid would come out narrower.
+  table.style.width = W.toFixed(4) + 'in';
+  const cg = document.createElement('colgroup');
+  for (let i = 1; i < edges.length; i++) {
+    const c = document.createElement('col');
+    c.style.width = (edges[i] - edges[i - 1]).toFixed(4) + 'in';
+    cg.appendChild(c);
+  }
+  table.appendChild(cg);
 
-  // Banding is decided once for the whole document and arrives in ctx. Never
-  // derive it from this page's rows.
-  const bands = ctx.bandCount || 1;
+  const td = (text, from, to, { cls, style, rowSpan = 1, height } = {}) => {
+    const c = document.createElement('td');
+    if (cls) c.className = cls;
+    c.textContent = text ?? '';
+    const n = col(to) - col(from);
+    if (n > 1) c.setAttribute('colspan', n);
+    if (rowSpan > 1) c.setAttribute('rowspan', rowSpan);
+    styleCell(c, style);
+    if (height != null) c.style.height = height + 'in';
+    return c;
+  };
+  // A borderless filler, where header and body differ in width.
+  const pad = (tr, from, to) => {
+    if (to - from > EPS) tr.appendChild(td('', from, to, { cls: 'pad' }));
+  };
 
-  // The head block is a fixed height whatever the label count; two labels means
-  // taller rows.
-  const nLab = tpl.checkLabels.length;
-  const chH = (G.checkRow * 3 / nLab).toFixed(4) + 'in';
-  // Head values come from the band being drawn.
-  const headAt = (band, gi, li) =>
-    ((ctx.bands?.[band]?.columns || [])[gi] || [])[li] || '';
-
-  // Each band is a fresh set of check columns: its own header, the same rows.
-  for (let band = 0; band < bands; band++) {
-  tpl.checkLabels.forEach((lab, i) => {
-    const r = tr();
-    if (i === 0) {
-      r.append(cell('stub', 'Dimension / Specification', { rowspan: nLab, colspan: 2 }),
-               cell('stub', 'Method', { rowspan: nLab }), cell('stub', 'Gage ID', { rowspan: nLab }));
+  // ---- header ----
+  const H = t.header;
+  const origin = new Map(), covered = new Set();
+  for (const c of H.cells) {
+    const [r, k] = c.at, [rs, cs] = c.span ?? [1, 1];
+    origin.set(`${r},${k}`, c);
+    for (let y = r; y < r + rs; y++) for (let z = k; z < k + cs; z++) {
+      if (y !== r || z !== k) covered.add(`${y},${z}`);
     }
-    const labelCell = () => {
-      // The span, not the cell, is lifted over the blank beside it. Lifting the
-      // cell makes Chromium paint its collapsed borders separately: a stray line
-      // under each label, in the PDF only.
-      const c = cell('chl');
-      const sp = document.createElement('span');
-      sp.textContent = lab;
-      c.appendChild(sp);
-      c.style.height = chH;
-      c.style.fontSize = G.fontCheck * 0.82 + 'pt';
-      return c;
-    };
-    const lc = labelCell();
-    if (single) {
-      const vc = cell('ch', headAt(band, 0, i), { colspan: g * 2 - 1 });
-      vc.style.height = chH;
-      vc.style.fontSize = G.fontCheck + 'pt';
-      r.append(lc, vc);      // centred, not stranded beside the label
-    } else {
-      r.appendChild(lc);
-      groups.forEach((_, gi) => {
-        if (gi > 0) r.appendChild(labelCell());
-        // Each entry column of each band carries its own date / initials / op#.
-        const vc = cell('ch', headAt(band, gi, i));
-        vc.style.height = chH;
-        vc.style.fontSize = G.fontCheck + 'pt';
-        r.appendChild(vc);
+  }
+  H.rows.forEach((h, r) => {
+    const tr = document.createElement('tr');
+    pad(tr, 0, hEdges[0]);
+    for (let k = 0; k < H.columns.length; k++) {
+      if (covered.has(`${r},${k}`)) continue;
+      const c = origin.get(`${r},${k}`) || {};
+      const [rs, cs] = c.span ?? [1, 1];
+      const text = c.bind != null ? fillText(`{${c.bind}}`, bind)
+                 : c.text != null ? fillText(c.text, bind) : '';
+      const cell = td(c.logo ? '' : text, hEdges[k], hEdges[k + cs], {
+        cls: c.logo ? 'logo' : undefined, style: styleOf(c.style), rowSpan: rs,
+        height: rs === 1 ? h : undefined
       });
+      if (c.logo) {
+        if (logoDataUri) {
+          const img = document.createElement('img');
+          img.src = logoDataUri;
+          cell.appendChild(img);
+        } else {
+          cell.textContent = 'LOGO';
+        }
+      }
+      tr.appendChild(cell);
     }
-    t.appendChild(r);
+    pad(tr, hEdges[hEdges.length - 1], W);
+    table.appendChild(tr);
   });
 
-  // `vals` is the row's result per entry column, for the band being drawn.
-  const checks = vals => single
-    ? [cell('meth', (vals || [])[0] || '', { colspan: g * 2 })]
-    : groups.map((_, gi) => cell('meth', (vals || [])[gi] || '', { colspan: 2 }));
+  // ---- body ----
+  const nLab = chk ? chk.labels.length : 1;
+  const bands = ctx.bandCount || 1;
+  const headAt = (band, k, li) => ((ctx.bands?.[band]?.columns || [])[k] || [])[li] || '';
 
-  rows.forEach((row, i) => {
-    if (row.type === 'header') {
-      const r = tr();
-      r.append(cell('grp', row.text, { colspan: 4 + g * 2 }));
-      t.appendChild(r);
-      return;
+  // Each band is a fresh set of check columns: its own heading block, the same rows.
+  for (let band = 0; band < bands; band++) {
+    for (let li = 0; li < nLab; li++) {
+      const tr = document.createElement('tr');
+      pad(tr, 0, bodyFrom);
+      for (let ci = 0; ci < B.columns.length; ci++) {
+        const c = B.columns[ci];
+        if (c.repeat != null) {
+          spans[ci].forEach(([a, m, z], k) => {
+            const lc = td('', a, m, { cls: 'chl', style: styleOf(c.labelStyle), height: B.labelRowHeight });
+            const sp = document.createElement('span');
+            sp.textContent = c.labels[li];
+            lc.appendChild(sp);
+            tr.append(lc, td(headAt(band, k, li), m, z,
+              { cls: 'ch', style: styleOf(c.headStyle), height: B.labelRowHeight }));
+          });
+          continue;
+        }
+        if (li > 0) continue;
+        // A heading covers its own column and headingSpan - 1 more.
+        const span = c.headingSpan ?? 1;
+        const end = spans[ci + span - 1][1];
+        tr.appendChild(td(c.heading ?? '', spans[ci][0], end,
+          { style: styleOf(B.headingStyle), rowSpan: nLab }));
+        ci += span - 1;
+      }
+      pad(tr, bodyTo, W);
+      table.appendChild(tr);
     }
-    let span = 1;
-    if (!row.isSub) for (let k = i + 1; k < rows.length && rows[k].isSub; k++) span++;
-    const r = tr();
-    if (!row.isSub) r.append(cell('n', row.number, span > 1 ? { rowspan: span } : {}));
-    // Dimension and method are shared; gage and readings belong to this band.
-    const rb = (row.bands || [])[band] || {};
-    r.append(cell('spec', toFont(row.spec || '')), cell('meth', row.method || ''),
-             cell('meth', toFont(rb.gageId || '')));
-    checks((rb.values || []).map(toFont)).forEach(c => r.appendChild(c));
-    [...r.children].forEach(td => { td.style.height = G.dataRow + 'in'; });
-    t.appendChild(r);
-  });
-  }   // end band
 
-  paper.appendChild(t);
+    rows.forEach((row, i) => {
+      const tr = document.createElement('tr');
+      pad(tr, 0, bodyFrom);
+      if (row.type === 'header') {
+        tr.appendChild(td(row.text, bodyFrom, bodyTo, { cls: 'grp', style: styleOf(B.sectionStyle) }));
+        pad(tr, bodyTo, W);
+        table.appendChild(tr);
+        return;
+      }
+      let span = 1;
+      if (!row.isSub) for (let k = i + 1; k < rows.length && rows[k].isSub; k++) span++;
+      // Dimension and method are shared; gage and readings belong to this band.
+      const rb = (row.bands || [])[band] || {};
+      const cell = (text, a, z, style, extra = {}) =>
+        tr.appendChild(td(text, a, z, { style, height: B.rowHeight, ...extra }));
+      B.columns.forEach((c, ci) => {
+        const st = styleOf(c.style);
+        switch (c.bind) {
+          case 'number':
+            if (!row.isSub) cell(row.number, spans[ci][0], spans[ci][1], st, { rowSpan: span });
+            break;
+          case 'spec':   cell(toFont(row.spec || ''), spans[ci][0], spans[ci][1], st); break;
+          case 'method': cell(row.method || '', spans[ci][0], spans[ci][1], st); break;
+          case 'gage':   cell(toFont(rb.gageId || ''), spans[ci][0], spans[ci][1], st); break;
+          case 'notes':  cell(row.notes || '', spans[ci][0], spans[ci][1], st); break;
+          case 'check':
+            spans[ci].forEach(([a, , z], k) => cell(toFont((rb.values || [])[k] || ''), a, z, st));
+            break;
+        }
+      });
+      pad(tr, bodyTo, W);
+      table.appendChild(tr);
+    });
+  }
 
-  const foot = document.createElement('div');
-  foot.className = 'page-foot';
-  foot.style.fontSize = G.fontFoot + 'pt';
-  foot.style.bottom = G.footerUp + 'in';
-  foot.style.left = side + 'in';
-  foot.style.right = side + 'in';
-  foot.textContent = `Page ${pageNo} of ${pageCount}`;
-  paper.appendChild(foot);
+  paper.appendChild(table);
+
+  for (const f of t.footer || []) {
+    const foot = document.createElement('div');
+    foot.className = 'page-foot';
+    styleCell(foot, styleOf(f.style));
+    if (f.size) foot.style.fontSize = f.size + 'pt';
+    foot.style.bottom = (f.bottom ?? 0) + 'in';
+    foot.style.left = side + 'in';
+    foot.style.right = side + 'in';
+    foot.style.justifyContent = { center: 'center', right: 'flex-end' }[f.align] || 'flex-start';
+    foot.textContent = fillText(f.text, bind);
+    paper.appendChild(foot);
+  }
   return paper;
 }
 
@@ -4190,8 +4214,9 @@ function renderSheetPreview() {
 
   const rows = pages.reduce((n, p) => n + p.length, 0);
   $('shPages').textContent = `${pages.length} page${pages.length === 1 ? '' : 's'}`;
-  const g = sh.orientation === 'landscape' ? 8 : 5;
-  const bands = bandCount(sh.stage, sh.orientation, rows);
+  const t = templateOf(sh);
+  const g = checkColumn(t)?.repeat ?? 0;
+  const bands = bandCount(t, rows);
   const total = g * bands;
   $('shPrevInfo').textContent =
     `${sh.orientation} \u00b7 ${rows} row${rows === 1 ? '' : 's'} \u00b7 ` +
@@ -4246,21 +4271,15 @@ function printCss(fontUri) {
     .page-foot span:nth-child(2){flex:1;text-align:center}
     table{border-collapse:collapse;table-layout:fixed}
     td{border:1px solid #000;padding:0 3px;overflow:hidden;vertical-align:middle}
-    .ttl{background:#d9d9d9;text-align:center}
-    .lbl{background:#d9d9d9;white-space:nowrap}
     .logo{text-align:center}
     .logo img{max-width:96%;max-height:92%;object-fit:contain}
-    .ch{background:#d9d9d9;border-left:none;text-align:center}
-    /* Only .29in wide, so let the label spill into the blank beside it. The
-       span does the lifting; a lifted cell prints a stray border segment. */
-    .chl{background:#d9d9d9;border-right:none;text-align:left;font-size:.82em;
-         overflow:visible;white-space:nowrap}
+    .pad{border:none}
+    .ch{border-left:none}
+    /* Let a check label spill into the blank beside it. The span does the
+       lifting; a lifted cell prints a stray border segment. */
+    .chl{border-right:none;overflow:visible;white-space:nowrap}
     .chl span{position:relative;z-index:1}
-    .stub{background:#d9d9d9;text-align:center}
-    .grp{background:#ededed;font-weight:bold;text-align:left;padding-left:5px}
-    .spec{text-align:center;font-family:'VerisurfGDT',Arial,sans-serif}
-    .meth{text-align:center}
-    .n{text-align:center}
+    .grp{padding-left:5px}
     tr{page-break-inside:avoid;break-inside:avoid}`;
 }
 
@@ -4283,7 +4302,7 @@ async function sheetPdfBytes(sh) {
     <style>${printCss(await symbolFontDataUri())}</style></head>
     <body>${holder.innerHTML}</body></html>`;
 
-  return window.api.printPdf({ html, landscape: sh.orientation === 'landscape' });
+  return window.api.printPdf({ html, landscape: isLandscape(templateOf(sh)) });
 }
 
 // The Sheets tab's Export PDF button.
@@ -4325,15 +4344,9 @@ let inspBusy = false, inspQueued = false, inspHold = null;
 
 const activeInsp = () => inspections.find(i => i.id === activeInspId) || null;
 
-// How many entry columns a form actually has: the merged single-entry forms have
-// one, the multi-column forms have as many check groups as the orientation shows.
-function columnCountFor(stage, orientation) {
-  const tpl = templateFor(stage);
-  if (tpl.checkMode === 'single') return 1;
-  return orientation === 'landscape'
-    ? 8 : 8 - (tpl.portraitHidden || []).length;
-}
-const labelsFor = stage => templateFor(stage).checkLabels;
+// A form's entry columns and the labels heading each one, from its template.
+const columnCountFor = x => checkColumn(templateOf(x))?.repeat ?? 0;
+const labelsFor = x => checkColumn(templateOf(x))?.labels ?? [];
 
 // A band is one full repeat of the form below the title block: its own check
 // header, gage IDs and entries. Dimension and method are shared across bands.
@@ -4356,11 +4369,11 @@ const sheetById = id => sheets.find(s => s.id === id) || null;
 function newInspection(sheetId) {
   const sh = sheetById(sheetId);
   reconcile(sh);
-  const cols = columnCountFor(sh.stage, sh.orientation);
-  const labels = labelsFor(sh.stage);
+  const cols = columnCountFor(sh);
+  const labels = labelsFor(sh);
   // Frozen with the record: editing the sheet later must not reshape it.
   const rowCount = sh.items.filter(i => i.type === 'header' || i.include).length;
-  const bands = bandCount(sh.stage, sh.orientation, rowCount);
+  const bands = bandCount(templateOf(sh), rowCount);
   const rows = [];
   for (const it of sh.items) {
     if (it.type === 'header') { rows.push({ type: 'header', text: it.text }); continue; }
@@ -4388,6 +4401,7 @@ function newInspection(sheetId) {
     sheetName: sh.name,
     stage: sh.stage,
     orientation: sh.orientation,
+    template: templateRefOf(templateOf(sh)),
     author: sh.author || '',
     editDate: sh.editDate || '',
     jobNumber: '',
@@ -4464,7 +4478,7 @@ function renderInspRows() {
 
   // One block per band, stacked as it prints: the check header, the column
   // headers, then the rows.
-  const labels = labelsFor(ins.stage);
+  const labels = labelsFor(ins);
   const cols = ins.columnCount || 1;
   const bands = ins.bandCount || 1;
   $('inspRows').closest('.sh-editor')?.style.setProperty('--ins-cols', cols);
@@ -4592,9 +4606,8 @@ function colInput(arr, idx, placeholder, cls) {
 // value per row, or a flat one-band column list. Runs as a record is loaded
 // from a package or from an embedded PDF.
 function restoreColumns(ins) {
-  const stage = ins.stage || 'in-process';
-  const labels = labelsFor(stage);
-  const cols = ins.columnCount || columnCountFor(stage, ins.orientation || 'landscape');
+  const labels = labelsFor(ins);
+  const cols = ins.columnCount || columnCountFor(ins);
   const bands = Math.max(1, ins.bandCount || 1);
 
   const out = blankBands(bands, cols, labels.length);
@@ -4637,19 +4650,35 @@ function restoreColumns(ins) {
 }
 
 // buildPage()'s context for a live sheet. totalRows is the whole sheet, never
-// one page: banding is decided for the document.
-const sheetCtx = (sh, totalRows) => ({
-  stage: sh.stage, orientation: sh.orientation,
-  author: sh.author, editDate: sh.editDate,
-  bandCount: bandCount(sh.stage, sh.orientation, totalRows)
-});
+// one page: banding is decided for the document. `pkg` is the package the sheet
+// belongs to; the Library passes a manifest's.
+const sheetCtx = (sh, totalRows,
+                  pkg = { part: partBindings(), author: doc.package.author,
+                          editDate: doc.package.editDate, templates: packageTemplates }) => {
+  const template = templateOf(sh, pkg.templates);
+  return {
+    template, bandCount: bandCount(template, totalRows), bands: null,
+    bind: {
+      part: pkg.part,
+      sheet: { name: sh.name, units: sh.units, custom: sh.custom || {},
+               author: sh.author ?? pkg.author ?? '', editDate: sh.editDate ?? pkg.editDate ?? '' },
+      record: null
+    }
+  };
+};
 
-// buildPage()'s context for a record, from its frozen stage, bands and header
-// values, so it always reprints on the form it was filled on.
-const inspCtx = ins => ({ stage: ins.stage || 'in-process', orientation: ins.orientation,
-                          bands: ins.bands, bandCount: ins.bandCount,
-                          jobNumber: ins.jobNumber, machine: ins.machine,
-                          author: ins.author, editDate: ins.editDate });
+// buildPage()'s context for a record, from its frozen bands and header values,
+// so it always reprints on the form it was filled on.
+const inspCtx = ins => ({
+  template: templateOf(ins), bandCount: ins.bandCount, bands: ins.bands,
+  bind: {
+    part: partBindings(),
+    sheet: { name: ins.sheetName, units: ins.units, custom: ins.sheetCustom || {},
+             author: ins.author ?? doc.package.author ?? '',
+             editDate: ins.editDate ?? doc.package.editDate ?? '' },
+    record: { jobNumber: ins.jobNumber, machine: ins.machine, custom: ins.custom || {} }
+  }
+});
 
 // Runs from openInspDrawing(), from Inspect's drawing and page controls, and
 // when the preview is toggled on.
@@ -4728,17 +4757,6 @@ function renderInspect() {
 // ---------------------------------------------------------------------------
 const RECORD_FILE = 'inspection.json';
 const RECORD_KIND = 'bubbler-inspection';
-
-// JSON with keys sorted recursively, so equal records hash equal whatever order
-// their fields were written in.
-function canonicalJson(v) {
-  if (Array.isArray(v)) return '[' + v.map(canonicalJson).join(',') + ']';
-  if (v && typeof v === 'object') {
-    return '{' + Object.keys(v).sort()
-      .map(k => JSON.stringify(k) + ':' + canonicalJson(v[k])).join(',') + '}';
-  }
-  return JSON.stringify(v === undefined ? null : v);
-}
 
 // What the record hash covers: what was inspected and recorded, never export
 // timestamps.
@@ -4840,6 +4858,7 @@ let recordSetHash = null;
 
 async function loadRecord(rec) {
   await releaseDocs();
+  packageTemplates = new Map();
   elements = []; sheets = []; activeSheetId = null;
   nextNumber = 1; uid = 1; clearSel(); pageIndex = 0;
   undoStack = []; redoStack = []; updateHistoryButtons();
@@ -5174,7 +5193,8 @@ async function autosave() {
   try {
     const manifest = await buildManifest();
     const entries = {
-      'manifest.json': new TextEncoder().encode(JSON.stringify(manifest))
+      'manifest.json': new TextEncoder().encode(JSON.stringify(manifest)),
+      ...templateEntries()
     };
     for (const d of docs) entries[d.file] = new Uint8Array(d.bytes.slice(0));
     const zip = fflate.zipSync(entries, { level: 0 });   // store, don't deflate
@@ -5331,7 +5351,7 @@ window.api?.onLockLost?.(async () => {
 // The sheet renderer, for library.js's Print mode.
 window.BubblerSheets = {
   buildPage, paginate, paginateRows, rowsFromSheet, printCss,
-  symbolFontDataUri, templateFor, renderSpec, toFont, geomFor, specSource,
+  symbolFontDataUri, templateOf, readPackageTemplates, partFromManifest, renderSpec, toFont, specSource,
   sheetCtx, enablePan, holdCentre, wheelZoom, stampElements, elementsFromManifest, paintElements,
   toWinAnsi
 };
@@ -5558,7 +5578,7 @@ function inspStem(ins) {
 // Bytes only; the caller decides where they land. Runs from the Inspect tab's
 // Export PDF button and from File > Export….
 async function inspPdfBytes(ins) {
-  const pages = paginateRows(ins.rows, ins.orientation, ins.stage);
+  const pages = paginateRows(ins.rows, templateOf(ins));
   const holder = document.createElement('div');
   pages.forEach((rows, i) =>
     holder.appendChild(buildPage(inspCtx(ins), rows, i + 1, pages.length)));
@@ -5567,7 +5587,7 @@ async function inspPdfBytes(ins) {
     <style>${printCss(await symbolFontDataUri())}</style></head>
     <body>${holder.innerHTML}</body></html>`;
 
-  const bytes = await window.api.printPdf({ html, landscape: ins.orientation === 'landscape' });
+  const bytes = await window.api.printPdf({ html, landscape: isLandscape(templateOf(ins)) });
   return attachRecord(bytes, ins);           // the file carries its own source
 }
 
@@ -5642,8 +5662,20 @@ $('shAdd').onclick = () => {
   renderSheets();
 };
 $('shName').oninput = e => { const s = activeSheet(); if (s) { s.name = e.target.value; markDirty(); renderSheetCards(); } };
-$('shStage').onchange = e => { const s = activeSheet(); if (s) { s.stage = e.target.value; markDirty(); renderSheets(); } };
-$('shOrient').onchange = e => { const s = activeSheet(); if (s) { s.orientation = e.target.value; markDirty(); renderSheetPreview(); } };
+$('shStage').onchange = e => {
+  const s = activeSheet();
+  if (!s) return;
+  s.stage = e.target.value;
+  s.template = builtinRef(s.stage, s.orientation);
+  markDirty(); renderSheets();
+};
+$('shOrient').onchange = e => {
+  const s = activeSheet();
+  if (!s) return;
+  s.orientation = e.target.value;
+  s.template = builtinRef(s.stage, s.orientation);
+  markDirty(); renderSheetPreview();
+};
 $('shAuthor').oninput = e => { const s = activeSheet(); if (s) { s.author = e.target.value; markDirty(); renderSheetPreview(); } };
 $('shEdited').oninput = e => { const s = activeSheet(); if (s) { s.editDate = e.target.value; markDirty(); renderSheetPreview(); } };
 $('shUnits').onchange = e => {
@@ -6651,6 +6683,7 @@ function resetDocument() {
   setDimUnit('in');
   pdfDoc = null; originalBytes = null; viewport = null;
   docs = []; activeDocId = null;
+  packageTemplates = new Map();
   sheets = []; activeSheetId = null;
   inspections = []; activeInspId = null;
   elements = []; nextNumber = 1; uid = 1; clearSel(); pageIndex = 0;
@@ -6822,6 +6855,7 @@ applyRailMode();         // authoring shape
 // Nothing is open at boot, so it's released.
 window.api?.lockRelease?.();
 loadConfig();
+loadUserTemplates();
 loadLogo();
 startAutosave();
 showLauncher();
@@ -6845,6 +6879,7 @@ renderDocList();
 async function loadPdfBytes(buf, name) {
   clearRecordMode();
   await releaseDocs();
+  packageTemplates = new Map();
   elements = []; nextNumber = 1; uid = 1; clearSel();
   sheets = []; activeSheetId = null;
   inspections = []; activeInspId = null;

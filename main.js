@@ -100,6 +100,21 @@ ipcMain.handle('app:open-data-folder', async () => {
 ipcMain.handle('app:data-folder', () => DATA_DIR);
 ipcMain.handle('app:version', () => app.getVersion());
 
+// The shop's own sheet templates: every .json in the data folder's templates/,
+// as raw text. The renderer parses and validates them, so its messages can
+// name the file. Runs once at startup.
+ipcMain.handle('templates:list', async () => {
+  const dir = path.join(appDir(), 'templates');
+  let names = [];
+  try { names = await fs.readdir(dir); } catch { return []; }
+  const out = [];
+  for (const name of names.filter(n => n.toLowerCase().endsWith('.json')).sort()) {
+    try { out.push({ file: name, text: await fs.readFile(path.join(dir, name), 'utf8') }); }
+    catch (err) { out.push({ file: name, error: err.message }); }
+  }
+  return out;
+});
+
 function configPath() {
   return path.join(appDir(), 'config.json');
 }

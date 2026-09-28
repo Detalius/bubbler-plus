@@ -311,7 +311,7 @@ async function showSheet(it) {
   const pages = sheetPages(it.sheet);
   pageCount = pages.length;
   page = Math.min(page, pageCount);
-  const ctx = S.sheetCtx(it.sheet, pages.reduce((n, p) => n + p.length, 0));
+  const ctx = S.sheetCtx(it.sheet, pages.reduce((n, p) => n + p.length, 0), pkgBindings());
   pages.forEach((rows, i) => {
     if (i + 1 !== page) return;          // one page at a time, like the drawing view
     host.appendChild(S.buildPage(ctx, rows, i + 1, pages.length));
@@ -346,8 +346,17 @@ function sheetPages(sh) {
       bands: []
     });
   }
-  return S.paginateRows(rows, sh.orientation, sh.stage);
+  return S.paginateRows(rows, S.templateOf(sh, pkgBindings().templates));
 }
+
+// The previewed package's part, authorship and templates, for its sheets. The
+// editor's own open package has nothing to do with it.
+const pkgBindings = () => ({
+  part: sheets().partFromManifest(openPkg.manifest),
+  author: openPkg.manifest.package?.author,
+  editDate: openPkg.manifest.package?.editDate,
+  templates: openPkg.templates ??= sheets().readPackageTemplates(openPkg.files).templates
+});
 
 // ---- Footer controls ----
 function updateFoot(info) {
@@ -410,7 +419,7 @@ $('libPrint').onclick = async () => {
       const sh = activeItem.sheet;
       const pages = sheetPages(sh);
       const holder = document.createElement('div');
-      const ctx = S.sheetCtx(sh, pages.reduce((n, p) => n + p.length, 0));
+      const ctx = S.sheetCtx(sh, pages.reduce((n, p) => n + p.length, 0), pkgBindings());
       pages.forEach((rows, i) => holder.appendChild(S.buildPage(ctx, rows, i + 1, pages.length)));
       const html = `<!doctype html><html><head><meta charset="utf-8">
         <style>${S.printCss(await S.symbolFontDataUri())}</style></head>

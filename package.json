@@ -1,6 +1,6 @@
 {
   "name": "bubbler-plus",
-  "version": "0.1.5",
+  "version": "0.1.4",
   "description": "Drawing bubbling and inspection packages",
   "author": "Jesiah Handke <jesiah.handke@outlook.com> (https://github.com/Detalius/)",
   "main": "main.js",
@@ -35,6 +35,7 @@
       "renderer.js",
       "library.js",
       "xlsx-append.js",
+      "sheet-template.js",
       "index.html",
       "package.json",
       "assets/**/*",

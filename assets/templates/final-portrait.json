@@ -1,0 +1,83 @@
+{
+  "formatVersion": 1,
+  "id": "final-portrait",
+  "name": "Final Inspection (AQL), portrait",
+  "stage": "final",
+  "page": {"size": [8.5, 11], "marginTop": 0.2569, "marginBottom": 0.5},
+  "font": {"family": "Arial", "size": 8.0},
+  "styles": {
+    "title": {"fill": "#d9d9d9", "align": "center", "size": 9.7},
+    "label": {"fill": "#d9d9d9", "size": 7.0, "wrap": false},
+    "value": {"size": 7.0},
+    "heading": {"fill": "#d9d9d9", "align": "center"},
+    "checkLabel": {"fill": "#d9d9d9", "size": 4.92},
+    "checkValue": {"fill": "#d9d9d9", "align": "center", "size": 6.0},
+    "section": {"fill": "#ededed", "bold": true},
+    "centered": {"align": "center"},
+    "callout": {"align": "center", "font": "symbol"},
+    "shaded": {"fill": "#d9d9d9", "align": "center"}
+  },
+  "fields": [
+    {"key": "record.jobNumber", "label": "Job Number"},
+    {"key": "record.machine", "label": "Machine & OP"},
+    {"key": "sheet.author", "label": "Author"},
+    {"key": "sheet.editDate", "label": "Edit Date"}
+  ],
+  "header": {
+    "columns": [2.494, 1.0519, 2.314, 0.7009, 1.4018],
+    "rows": [0.2122, 0.199, 0.1972, 0.1986, 0.199],
+    "cells": [
+      {"at": [0, 0], "span": [5, 1], "logo": true},
+      {"at": [0, 1], "span": [1, 4], "text": "Final Inspection (AQL)", "style": "title"},
+      {"at": [1, 1], "text": "Customer", "style": "label"},
+      {"at": [1, 2], "bind": "part.customer", "style": "value"},
+      {"at": [1, 3], "text": "Job Number", "style": "label"},
+      {"at": [1, 4], "bind": "record.jobNumber", "style": "value"},
+      {"at": [2, 1], "text": "Part Number", "style": "label"},
+      {"at": [2, 2], "bind": "part.number", "style": "value"},
+      {"at": [2, 3], "text": "Machine & OP", "style": "label"},
+      {"at": [2, 4], "bind": "record.machine", "style": "value"},
+      {"at": [3, 1], "text": "Part Name", "style": "label"},
+      {"at": [3, 2], "bind": "part.name", "style": "value"},
+      {"at": [3, 3], "text": "Last Author", "style": "label"},
+      {"at": [3, 4], "bind": "sheet.author", "style": "value"},
+      {"at": [4, 1], "text": "Part Revision", "style": "label"},
+      {"at": [4, 2], "bind": "part.revision", "style": "value"},
+      {"at": [4, 3], "text": "Last Edit Date", "style": "label"},
+      {"at": [4, 4], "bind": "sheet.editDate", "style": "value"}
+    ]
+  },
+  "body": {
+    "axis": "rows",
+    "rowHeight": 0.2117,
+    "labelRowHeight": 0.245,
+    "bands": 1,
+    "headingStyle": "heading",
+    "sectionStyle": "section",
+    "columns": [
+      {
+        "width": 0.2417,
+        "heading": "Dimension / Specification",
+        "headingSpan": 2,
+        "bind": "number",
+        "style": "centered"
+      },
+      {"width": 2.2523, "bind": "spec", "style": "callout"},
+      {"width": 1.0519, "heading": "Method", "bind": "method", "style": "centered"},
+      {"width": 0.9122, "heading": "Gage ID", "bind": "gage", "style": "shaded"},
+      {
+        "repeat": 1,
+        "width": 3.5045,
+        "labelWidth": 0.282307,
+        "labels": ["Date:", "Technician:"],
+        "bind": "check",
+        "style": "centered",
+        "labelStyle": "checkLabel",
+        "headStyle": "checkValue"
+      }
+    ]
+  },
+  "footer": [
+    {"text": "Page {page.number} of {page.count}", "align": "left", "bottom": 0.128, "size": 7.3}
+  ]
+}
