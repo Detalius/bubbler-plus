@@ -1,10 +1,10 @@
 // Handlers clobbered by a later broad selector.
 //
-// `$('railHome').onclick = ...` on line 3887 and
-// `document.querySelectorAll('.nav').forEach(b => b.onclick = ...)` on line 4588
-// both bind the same element. Last assignment wins, so the specific handler is
-// silently replaced by the generic one and the button does the wrong thing with
-// no error anywhere. Caught once; it cost a debugging round.
+// A specific `$('railHome').onclick = ...` and a broad
+// `document.querySelectorAll('.nav').forEach(b => b.onclick = ...)` can bind the
+// same element. Last assignment wins, so the specific handler is silently
+// replaced by the generic one and the button does the wrong thing with no error
+// anywhere.
 const fs = require('fs');
 const html = fs.readFileSync('index.html', 'utf8');
 

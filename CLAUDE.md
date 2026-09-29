@@ -23,7 +23,7 @@ code. Both are private and gitignored.
 | `index.html` | All markup and all CSS. |
 | `assets/templates/` | The eight built-in sheet templates. |
 | `tests/` | `node --test` suite. |
-| `tools/` | Private (gitignored): `check.sh`, `cssaudit.js`, `handlers.js`, `mockshare.bat`, `e2e/`. |
+| `tools/` | Dev checks: `check.sh` (runs `cssaudit.js` and `handlers.js`), `mockshare.bat` (a fake share for the crawl). `e2e/` is private (gitignored). |
 
 ## Commands
 
