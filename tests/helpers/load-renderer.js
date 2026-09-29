@@ -1,13 +1,14 @@
 // Pulls named top-level declarations out of renderer.js and runs them in a
 // sandbox. Only for pure functions and constants: anything that touches the
 // DOM, Konva or pdf.js can't be loaded this way. Names are loaded in the order
-// given, so list dependencies first.
+// given, so list dependencies first. `globals` stands in for renderer.js's
+// imports.
 const acorn = require('acorn');
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-function loadRenderer(names) {
+function loadRenderer(names, globals = {}) {
   const src = fs.readFileSync(path.join(__dirname, '..', '..', 'renderer.js'), 'utf8');
   const ast = acorn.parse(src, { ecmaVersion: 'latest', sourceType: 'module' });
   const byName = new Map();
@@ -23,7 +24,7 @@ function loadRenderer(names) {
     // const/let become var so the sandbox exposes them as properties.
     return src.slice(node.start, node.end).replace(/^(const|let)\b/, 'var');
   });
-  const ctx = vm.createContext({});
+  const ctx = vm.createContext({ ...globals });
   vm.runInContext(parts.join('\n'), ctx);
   return Object.fromEntries(names.map(n => [n, ctx[n]]));
 }

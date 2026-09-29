@@ -235,3 +235,31 @@ test('stored template references are read defensively', () => {
   assert.equal(T.readTemplateRef(null), null);
   assert.equal(T.readTemplateRef({ hash: '0123456789abcdef' }), null);
 });
+
+// ---- custom values ----------------------------------------------------------
+
+test('a custom binding never reads an inherited property', () => {
+  const ctx = { sheet: { custom: {} }, record: { custom: { lot: 42 } } };
+  assert.equal(T.resolveBinding('sheet.constructor', ctx), '');
+  assert.equal(T.fillText('[{sheet.constructor}]', ctx), '[]');
+  assert.equal(T.resolveBinding('record.lot', ctx), '', 'only text is printed');
+});
+
+test('stored custom values keep declarable names and text only', () => {
+  const read = v => JSON.stringify(T.readCustom(v));
+  assert.equal(read({ heat_lot: 'H-7', station2: '4' }), '{"heat_lot":"H-7","station2":"4"}');
+  assert.equal(read({ Heat: 'x', '2nd': 'x', 'a-b': 'x', __proto__x: 'x' }), '{}');
+  assert.equal(read({ n: 5, b: true, o: {}, blank: '' }), '{}');
+  for (const junk of [null, undefined, 'text', 7, ['a']]) assert.equal(read(junk), '{}');
+});
+
+test('customNames lists one scope\'s custom fields, never built-ins', () => {
+  const t = { fields: [
+    { key: 'sheet.author', label: 'A' }, { key: 'sheet.station', label: 'S' },
+    { key: 'record.heat_lot', label: 'H' }, { key: 'record.machine', label: 'M' },
+    { key: 'sheet.name', label: 'N' }
+  ] };
+  assert.deepEqual(T.customNames(t, 'sheet'), ['station']);
+  assert.deepEqual(T.customNames(t, 'record'), ['heat_lot']);
+  assert.deepEqual(T.customNames({}, 'sheet'), []);
+});

@@ -3,7 +3,8 @@ import SYMBOLS from './assets/symbols.json' with { type: 'json' };
 import METHODS from './assets/methods.json' with { type: 'json' };
 import {
   validateTemplate, checkColumn, headerWidth, bodyWidth, bandCount, paginateRows, fillText,
-  canonicalJson, templateHash, packageTemplateFiles, readPackageTemplates, readTemplateRef
+  canonicalJson, templateHash, packageTemplateFiles, readPackageTemplates, readTemplateRef,
+  readCustom, customNames
 } from './sheet-template.js';
 import IPI_L from './assets/templates/ipi-landscape.json' with { type: 'json' };
 import IPI_P from './assets/templates/ipi-portrait.json' with { type: 'json' };
@@ -270,7 +271,7 @@ async function confirmAction(message, detail, okLabel = 'OK', opts = {}) {
 // ---------------------------------------------------------------------------
 // Package state
 // ---------------------------------------------------------------------------
-const SCHEMA_VERSION = '0.38.0';
+const SCHEMA_VERSION = '0.39.0';
 // version is a fallback; the real one comes from package.json via main.
 const APP = { name: 'BubblerPlus', version: '0.1.0' };
 window.api?.appVersion?.().then(v => { if (v) APP.version = v; });
@@ -939,6 +940,8 @@ async function buildManifest() {
       template: ins.template,
       jobNumber: ins.jobNumber || '',
       machine: ins.machine || '',
+      ...customProp('custom', ins.custom),
+      ...customProp('sheetCustom', ins.sheetCustom),
       author: ins.author || '',
       editDate: ins.editDate || '',
       bandCount: ins.bandCount || 1,
@@ -959,6 +962,7 @@ async function buildManifest() {
       orientation: sh.orientation,
       template: sh.template,
       units: sh.units === 'mm' ? 'mm' : 'in',
+      ...customProp('custom', sh.custom),
       author: sh.author || '',
       editDate: sh.editDate || '',
       createdUtc: sh.createdUtc,
@@ -1039,6 +1043,7 @@ function applyManifest(m) {
     orientation: sh.orientation || 'landscape',
     template: storedRef(sh, { follow: true }),
     units: sh.units === 'mm' ? 'mm' : 'in',
+    custom: readCustom(sh.custom),
     author: sh.author ?? '',
     editDate: sh.editDate ?? '',
     createdUtc: sh.createdUtc || null,
@@ -1062,6 +1067,8 @@ function applyManifest(m) {
     template: storedRef(ins),
     jobNumber: ins.jobNumber || '',
     machine: ins.machine || '',
+    custom: readCustom(ins.custom),
+    sheetCustom: readCustom(ins.sheetCustom),
     author: ins.author || '',
     editDate: ins.editDate || '',
     ...restoreColumns(ins),
@@ -3883,6 +3890,13 @@ function storedRef(x, { follow = false } = {}) {
   return follow && BUILTIN_IDS.has(r.id) ? templateRefOf(templates.get(r.id)) : r;
 }
 
+// Custom values as a property to spread into a manifest entry or record, absent
+// when there are none, so a record without them hashes as it always has.
+const customProp = (key, v) => {
+  const c = readCustom(v);
+  return Object.keys(c).length ? { [key]: c } : {};
+};
+
 // Whether a sheet or record is drawn on the exact version its reference names.
 const onExactTemplate = x =>
   !!x?.template?.hash && (packageTemplates.has(x.template.hash) || templatesByHash.has(x.template.hash));
@@ -4386,7 +4400,13 @@ function newInspection(sheetId) {
   const labels = labelsFor(sh);
   // Frozen with the record: editing the sheet later must not reshape it.
   const rowCount = sh.items.filter(i => i.type === 'header' || i.include).length;
-  const bands = bandCount(templateOf(sh), rowCount);
+  const t = templateOf(sh);
+  const bands = bandCount(t, rowCount);
+  // Only the sheet fields this form declares; values left over from another
+  // form stay on the sheet.
+  const declared = customNames(t, 'sheet');
+  const sheetCustom = Object.fromEntries(
+    Object.entries(readCustom(sh.custom)).filter(([k]) => declared.includes(k)));
   const rows = [];
   for (const it of sh.items) {
     if (it.type === 'header') { rows.push({ type: 'header', text: it.text }); continue; }
@@ -4414,11 +4434,13 @@ function newInspection(sheetId) {
     sheetName: sh.name,
     stage: sh.stage,
     orientation: sh.orientation,
-    template: templateRefOf(templateOf(sh)),
+    template: templateRefOf(t),
     author: sh.author || '',
     editDate: sh.editDate || '',
     jobNumber: '',
     machine: '',
+    custom: {},
+    sheetCustom,
     createdUtc: new Date().toISOString(),
     rows
   };
@@ -4780,6 +4802,8 @@ function inspectionCore(ins) {
     id: ins.id, sheetId: ins.sheetId, sheetName: ins.sheetName,
     stage: ins.stage, orientation: ins.orientation,
     jobNumber: ins.jobNumber || '', machine: ins.machine || '',
+    ...customProp('custom', ins.custom),
+    ...customProp('sheetCustom', ins.sheetCustom),
     author: ins.author || '',
     editDate: ins.editDate || '',
     bandCount: ins.bandCount || 1,
@@ -4910,6 +4934,7 @@ async function loadRecord(rec) {
     orientation: ins.orientation || 'landscape',
     template: carried ? templateRefOf(carried) : storedRef(ins),
     jobNumber: ins.jobNumber || '', machine: ins.machine || '',
+    custom: readCustom(ins.custom), sheetCustom: readCustom(ins.sheetCustom),
     author: ins.author || '', editDate: ins.editDate || '',
     ...restoreColumns(ins),          // also migrates any older single-value record
     createdUtc: ins.createdUtc || null

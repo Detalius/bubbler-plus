@@ -13,6 +13,7 @@ const ALWAYS = new Set([
 const BUILTIN_FIELDS = new Set([
   'sheet.author', 'sheet.editDate', 'record.jobNumber', 'record.machine'
 ]);
+const CUSTOM_NAME = /^[a-z][a-z0-9_]*$/;
 const CUSTOM_KEY = /^(sheet|record)\.[a-z][a-z0-9_]*$/;
 const BODY_BINDS = new Set(['number', 'spec', 'method', 'gage', 'notes']);
 const ALIGN = new Set(['left', 'center', 'right']);
@@ -151,10 +152,31 @@ export function resolveBinding(key, ctx) {
   const scope = key.slice(0, dot), name = key.slice(dot + 1);
   const src = ctx?.[scope];
   if (!src) return '';
-  const builtin = ALWAYS.has(key) || BUILTIN_FIELDS.has(key);
-  const v = builtin ? src[name] : src.custom?.[name];
-  return v == null ? '' : String(v);
+  if (ALWAYS.has(key) || BUILTIN_FIELDS.has(key)) return src[name] == null ? '' : String(src[name]);
+  // Own text only: `custom` is a plain object, so {sheet.constructor} would
+  // otherwise print Object's source.
+  const v = src.custom && Object.hasOwn(src.custom, name) ? src.custom[name] : null;
+  return typeof v === 'string' ? v : '';
 }
+
+// Custom values as stored on a sheet or record: names a template could declare,
+// non-empty text only. Anything else is dropped. Runs on every manifest and
+// record read, and on write.
+export function readCustom(v) {
+  const out = {};
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return out;
+  for (const [k, val] of Object.entries(v)) {
+    if (CUSTOM_NAME.test(k) && typeof val === 'string' && val) out[k] = val;
+  }
+  return out;
+}
+
+// The custom field names a template declares in one scope, 'sheet' or 'record'.
+export const customNames = (t, scope) => (t?.fields ?? [])
+  .map(f => f?.key)
+  .filter(k => CUSTOM_KEY.test(k ?? '') && k.startsWith(`${scope}.`)
+            && !ALWAYS.has(k) && !BUILTIN_FIELDS.has(k))
+  .map(k => k.slice(scope.length + 1));
 
 // `text` with every {binding} filled in.
 export const fillText = (text, ctx) =>
