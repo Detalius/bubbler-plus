@@ -3836,9 +3836,12 @@ let templateProblems = [];           // { file, errors[] } for templates left ou
 // The open package's own templates, by hash, from its templates/ folder.
 let packageTemplates = new Map();
 
-// Runs once at startup.
+// Runs at startup and from Settings > Reload. A reload forgets the previous
+// shop templates first, so a deleted or fixed file takes effect.
 async function loadUserTemplates() {
   if (!window.api?.listTemplates) return;
+  for (const id of [...templates.keys()]) if (!BUILTIN_IDS.has(id)) templates.delete(id);
+  for (const h of [...templatesByHash.keys()]) if (!BUILTIN_HASHES.has(h)) templatesByHash.delete(h);
   templateProblems = [];
   for (const { file, text, error } of await window.api.listTemplates()) {
     let t = null, errors = error ? [error] : [];
@@ -3855,6 +3858,12 @@ async function loadUserTemplates() {
   }
   for (const p of templateProblems) console.warn(`Template ${p.file} left out:`, p.errors);
 }
+
+// One line per template left out, naming the file and its first few problems.
+// Shown at startup and in Settings.
+const templateProblemText = () => templateProblems.map(p =>
+  `${p.file}: ${p.errors.slice(0, 3).join('; ')}${p.errors.length > 3 ? ` (+${p.errors.length - 3} more)` : ''}`
+).join('\n');
 
 // The built-in a sheet's stage and orientation map to.
 const BUILTIN_BY_STAGE = {
@@ -5118,6 +5127,14 @@ function settingsDialog() {
       <p class="hint" id="cfgIndex">\u2014</p>
       <p class="hint" id="cfgStatus">Not tested.</p>
       <p class="hint" id="cfgScan" style="display:none"></p>
+      <h3 style="margin-top:16px">Sheet templates</h3>
+      <p class="hint">Your shop's own forms are .json files in the templates folder. They are
+	 checked when Bubbler+ starts, or when you press Reload.</p>
+      <p class="hint" id="cfgTpl" style="white-space:pre-line"></p>
+      <div class="actions" style="justify-content:flex-start; margin-top:8px">
+        <button id="cfgTplOpen">Open templates folder</button>
+        <button id="cfgTplReload">Reload</button>
+      </div>
       <div class="actions">
         <button id="cfgTest">Test</button>
         <button id="cfgSetup">Rebuild index</button>
@@ -5245,6 +5262,25 @@ function settingsDialog() {
 
   // Settings, recents, recovery and the local index live in the data folder.
   window.api?.dataFolder?.().then(p => { if (p) q('#cfgData').title = p; });
+  const showTemplates = () => {
+    const n = [...templates.keys()].filter(id => !BUILTIN_IDS.has(id)).length;
+    const bad = templateProblems.length;
+    q('#cfgTpl').textContent = `${n} shop template${n === 1 ? '' : 's'} loaded.` +
+      (bad ? `\n${bad} left out:\n${templateProblemText()}` : '');
+    q('#cfgTpl').style.color = bad ? '#d08a70' : '';
+  };
+  showTemplates();
+  q('#cfgTplOpen').onclick = async () => {
+    const r = await window.api?.openTemplatesFolder?.();
+    if (r && !r.ok) await notify('Could not open the templates folder', `${r.path}\n\n${r.error}`);
+  };
+  // The open sheet's picker and preview pick up added or fixed forms at once.
+  q('#cfgTplReload').onclick = async () => {
+    await loadUserTemplates();
+    showTemplates();
+    if (activeSheet()) renderSheets();
+  };
+
   q('#cfgData').onclick = async () => {
     const r = await window.api?.openDataFolder?.();
     if (r && !r.ok) await notify('Could not open the data folder', `${r.path}\n\n${r.error}`);
@@ -6967,11 +7003,18 @@ applyRailMode();         // authoring shape
 // Nothing is open at boot, so it's released.
 window.api?.lockRelease?.();
 loadConfig();
-loadUserTemplates();
+const shopTemplatesLoaded = loadUserTemplates();
 loadLogo();
 startAutosave();
 showLauncher();
-offerRecovery();         // and this may replace it with a recovered session
+// Recovery may replace the launcher with a recovered session. A template that
+// failed to load is reported after it, so the two prompts never stack.
+Promise.all([shopTemplatesLoaded, offerRecovery()]).then(() => {
+  const n = templateProblems.length;
+  if (n) notify(`${n} sheet template${n === 1 ? '' : 's'} could not be loaded`,
+    `${templateProblemText()}\n\nThe other forms work as normal. Fix or remove the file, ` +
+    'then use Reload in Settings > Sheet templates.');
+});
 
 // Clicks on the grey margin around the stage deselect.
 $('viewport').addEventListener('mousedown', e => {

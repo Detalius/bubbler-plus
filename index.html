@@ -674,6 +674,8 @@
            display: flex; align-items: center; justify-content: center; z-index: 90; }
   .dialog { background: var(--panel); border: 1px solid var(--edge); border-radius: 8px;
             padding: 20px 22px; width: 430px; box-shadow: 0 14px 44px rgba(0,0,0,.55); }
+  /* Settings outgrows a short window; it scrolls rather than hiding Save. */
+  .modal-back > .dialog { max-height: calc(100vh - 32px); overflow-y: auto; }
   .dialog h2 { margin: 0 0 4px; font-size: 15px; font-weight: 500; }
   .dialog .sub { color: var(--ink-dim); font-size: 12px; margin: 0 0 16px; }
   .dialog .row { grid-template-columns: 96px 1fr; }

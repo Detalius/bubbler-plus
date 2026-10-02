@@ -15,7 +15,7 @@ Built for small-shop QC: first article reports, in-process checks, final reports
 
 - **Bubble a drawing.** Numbered balloons, reference balloons, leaders, boxes, lines and text notes, over any PDF. Handles multi-page pdfs and can store multiple drawings per package.
 - **List the dimensions.** One primary callout per balloon, sub-callouts tied to any balloon, separate lists for inches and millimetres, with a GD&T frame builder for feature control frames.
-- **Author inspection sheets.** Pick a sheet type from In-Process, First Article, Multi-Part First Article, or Final. Pick which dimensions go on which sheet, and override dimensions or recommended inspection method for any individual dimension.
+- **Author inspection sheets.** Pick the form it prints on: the built-in In-Process, First Article, Multi-Part First Article or Final, in portrait or landscape, or one of your shop's own (see [Your own forms](#your-own-forms)). Pick which dimensions go on which sheet, and override dimensions or recommended inspection method for any individual dimension.
 - **Record an inspection.** Fill out any sheet you've created with actual numbers. Records snapshot the package as it *was*, so any changes (remove bubbles, add bubbles, fix a mistake) won't appear — if a dimension was wrong, you'll see it in any past records.
 - **Find it again.** Packages publish themselves to an index as they are saved, so you can Quick Find a package by part number, part name, customer or file name.
 - **Export.** Bubbled drawings, inspection sheets and records as PDF, or the dimension list to Excel.
@@ -85,7 +85,7 @@ Say you have PN-1234 Rev B to bubble and inspect.
 
 ![Filling out dimensions](docs/images/dimensions.png)
 
-**4. Build a sheet.** The **Sheets** page turns those dimensions into an inspection sheet. Add a sheet, select the type (IPI, FAI, etc), change the orientation, units, and sign off as author. Drag rows to reorder. Anything that needs to read differently on this one sheet can be overridden for just this sheet and nothing else.
+**4. Build a sheet.** The **Sheets** page turns those dimensions into an inspection sheet. Add a sheet, pick its form (IPI, FAI, etc, portrait or landscape, or your shop's own) and its units, and fill in the header fields the form asks for, like author. Drag rows to reorder. Anything that needs to read differently on this one sheet can be overridden for just this sheet and nothing else.
 
 ![Making a sheet](docs/images/sheets.png)
 
@@ -123,8 +123,17 @@ Settings, recent files, crash recovery and the local index live in your Roaming 
 | `recents.json` | The recent packages list — paths only |
 | `recovery.insp`, `recovery.json` | Autosave of unsaved work, offered back after a crash |
 | `.bubbler-index/` | The local search index: every package, or only those outside the Packages root when an Index folder is set |
+| `templates/` | Your shop's own sheet forms, if any — see below |
 
 This folder survives updates and uninstalls. Deleting it resets Bubbler+ to factory settings and touches none of your packages.
+
+## Your own forms
+
+Every printed sheet is drawn from a form template. The eight built-in forms cover in-process, first article, multi-part first article and final inspection, each in portrait and landscape. A shop can add its own: a template is a `.json` file in the `templates` folder of your data folder. **Settings > Sheet templates** opens that folder, shows how many of your forms loaded, and has **Reload** for picking up a new or edited file without restarting.
+
+A form decides the sheet's whole layout: its page, the header grid, which header fields you fill in (job number, machine, or anything your shop needs, like a heat lot), the table's columns, and how many check columns it repeats. Bubbler+ checks every template when it loads. One with a mistake is left out, and you're told which file and why — the other forms keep working.
+
+A package carries a copy of every non-built-in form its sheets use, and every inspection record keeps the exact form it was filled on. So a package prints the same on a machine that doesn't have your templates, and an old record still reprints on its original form after the template is changed.
 
 ## Updates
 

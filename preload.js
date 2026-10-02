@@ -23,6 +23,7 @@ contextBridge.exposeInMainWorld('api', {
   openDataFolder: () => ipcRenderer.invoke('app:open-data-folder'),
   dataFolder: () => ipcRenderer.invoke('app:data-folder'),
   listTemplates: () => ipcRenderer.invoke('templates:list'),
+  openTemplatesFolder: () => ipcRenderer.invoke('templates:open-folder'),
   appVersion: () => ipcRenderer.invoke('app:version'),
   setConfig: patch => ipcRenderer.invoke('config:set', patch),
   testPath: dir => ipcRenderer.invoke('config:test-path', dir),

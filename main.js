@@ -115,6 +115,15 @@ ipcMain.handle('templates:list', async () => {
   return out;
 });
 
+// Opens the templates folder from Settings, creating it first: a shop's first
+// template has nowhere to go until it exists.
+ipcMain.handle('templates:open-folder', async () => {
+  const dir = path.join(appDir(), 'templates');
+  try { await fs.mkdir(dir, { recursive: true }); } catch { /* openPath reports it */ }
+  const err = await shell.openPath(dir);
+  return err ? { ok: false, error: err, path: dir } : { ok: true, path: dir };
+});
+
 function configPath() {
   return path.join(appDir(), 'config.json');
 }
