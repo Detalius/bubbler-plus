@@ -3510,6 +3510,12 @@ function renderSheetRows() {
   reconcile(sh);
   $('shName').value = sh.name;
   fillTemplatePicker(sh);
+  // Like a record's ⚠: the exact form is nowhere, so a stand-in is drawing it.
+  const missing = !onExactTemplate(sh);
+  $('shMissing').hidden = !missing;
+  if (missing) {
+    $('shMissing').textContent = `⚠ form not available here — shown on “${templateOf(sh).name}”`;
+  }
   // Authorship is per sheet; older sheets fall back to the package's.
   buildFields($('shFields'), templateOf(sh), 'sheet', activeSheet, {
     fallback: { author: doc.package.author, editDate: doc.package.editDate },

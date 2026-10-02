@@ -131,7 +131,7 @@ This folder survives updates and uninstalls. Deleting it resets Bubbler+ to fact
 
 Every printed sheet is drawn from a form template. The eight built-in forms cover in-process, first article, multi-part first article and final inspection, each in portrait and landscape. A shop can add its own: a template is a `.json` file in the `templates` folder of your data folder. **Settings > Sheet templates** opens that folder, shows how many of your forms loaded, and has **Reload** for picking up a new or edited file without restarting.
 
-A form decides the sheet's whole layout: its page, the header grid, which header fields you fill in (job number, machine, or anything your shop needs, like a heat lot), the table's columns, and how many check columns it repeats. Bubbler+ checks every template when it loads. One with a mistake is left out, and you're told which file and why — the other forms keep working.
+A form decides the sheet's whole layout: its page, the header grid, which header fields you fill in (job number, machine, or anything your shop needs, like a heat lot), the table's columns, and how many check columns it repeats. Bubbler+ checks every template when it loads. One with a mistake is left out, and you're told which file and why — the other forms keep working. The full format, with examples, is in [TEMPLATE-FORMAT.md](TEMPLATE-FORMAT.md); the built-in forms in `assets/templates/` are written in it and make good starting points.
 
 A package carries a copy of every non-built-in form its sheets use, and every inspection record keeps the exact form it was filled on. So a package prints the same on a machine that doesn't have your templates, and an old record still reprints on its original form after the template is changed.
 
