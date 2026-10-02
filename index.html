@@ -185,8 +185,9 @@
   .spacer { flex: 1; }
 
   /* Per-tool defaults under the toolbar: what a tool creates next, never the
-     selection. */
-  #defaults { display: flex; align-items: center; gap: 14px; padding: 7px 10px;
+     selection. Fixed height: Select has no inputs, and a right-click marquee
+     switching to it must not shift the page mid-drag. */
+  #defaults { display: flex; align-items: center; gap: 14px; padding: 7px 10px; height: 44px;
               border-bottom: 1px solid var(--edge); background: #262626;
               overflow-x: auto; }
   #defaults .field { display: flex; align-items: center; gap: 6px; flex: none; }
@@ -439,10 +440,17 @@
   .sh-empty { color: #6f6f6f; font-style: italic; font-size: 12px; padding: 14px 4px; }
 
   .sh-editor { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
-  .sh-bar { display: flex; align-items: center; gap: 7px; padding: 9px 12px;
+  .sh-bar { display: flex; align-items: flex-end; gap: 7px; padding: 9px 12px;
             border-bottom: 1px solid var(--edge); background: var(--panel); flex-wrap: wrap; }
   .sh-bar .grow { flex: 1; }
   .sh-bar input.nm { width: 132px; }
+  #shTemplate { width: 220px; }
+  /* A form's generated inputs flow in the bar like its other controls. */
+  .sh-bar .fields { display: contents; }
+  /* A muted caption above each bar control, so a filled box still says what
+     it is. */
+  .sh-bar .cap { display: flex; flex-direction: column; gap: 2px; }
+  .sh-bar .cap > span { color: var(--ink-dim); font-size: 10.5px; padding-left: 2px; }
   /* The selection bar, between the sheet header and the rows it acts on. */
   .sh-selbar { display: flex; align-items: center; gap: 7px;
                padding: 7px 12px; border-bottom: 1px solid var(--edge); }
@@ -1016,23 +1024,14 @@
 
         <div class="sh-editor">
           <div class="sh-bar" id="shBar">
-            <input id="shName" class="nm" placeholder="Sheet name">
-            <select id="shStage">
-              <option value="in-process">In-process</option>
-              <option value="first-article">First article</option>
-              <option value="multi-part-fa">Multi-part FA</option>
-              <option value="final">Final / AQL</option>
-            </select>
-            <select id="shOrient">
-              <option value="landscape">Landscape</option>
-              <option value="portrait">Portrait</option>
-            </select>
-            <select id="shUnits" title="Which authored spec this sheet pulls from">
-              <option value="in">Inch specs</option>
-              <option value="mm">Millimetre specs</option>
-            </select>
-            <input id="shAuthor" class="hdr-in" placeholder="Author">
-            <input id="shEdited" class="hdr-in" type="date" title="Last edit date">
+            <label class="cap"><span>Sheet name</span><input id="shName" class="nm"></label>
+            <label class="cap"><span>Form</span><select id="shTemplate"></select></label>
+            <label class="cap" title="Which authored spec this sheet pulls from"><span>Specs</span>
+              <select id="shUnits">
+                <option value="in">Inch</option>
+                <option value="mm">Millimetre</option>
+              </select></label>
+            <span id="shFields" class="fields"></span>
             <span class="grow"></span>
             <span class="pill warn" id="shUnconv" hidden></span>
             <button id="shPrint" class="primary">Export PDF</button>
@@ -1077,8 +1076,7 @@
 
         <div class="sh-editor">
           <div class="sh-bar" id="inspBar">
-            <input id="inspJob" class="nm" placeholder="Job number">
-            <input id="inspMachine" class="nm" placeholder="Machine / ops">
+            <span id="inspFields" class="fields"></span>
             <span class="ins-src" id="inspSrc"></span>
             <span class="grow"></span>
             <button id="inspFetch" hidden title="Load the bubbled drawing from the source package">Fetch bubble print</button>

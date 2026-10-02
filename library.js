@@ -316,7 +316,7 @@ async function showSheet(it) {
     if (i + 1 !== page) return;          // one page at a time, like the drawing view
     host.appendChild(S.buildPage(ctx, rows, i + 1, pages.length));
   });
-  updateFoot(`${it.label} \u00b7 ${it.sheet.stage} \u00b7 ${it.sheet.orientation}`);
+  updateFoot(`${it.label} \u00b7 ${ctx.template.name}`);
 }
 
 // Rebuilds the printable rows from the stored manifest. The editor builds the

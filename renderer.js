@@ -4,7 +4,7 @@ import METHODS from './assets/methods.json' with { type: 'json' };
 import {
   validateTemplate, checkColumn, headerWidth, bodyWidth, bandCount, paginateRows, fillText,
   canonicalJson, templateHash, packageTemplateFiles, readPackageTemplates, readTemplateRef,
-  readCustom, customNames
+  readCustom, customNames, isBuiltinField
 } from './sheet-template.js';
 import IPI_L from './assets/templates/ipi-landscape.json' with { type: 'json' };
 import IPI_P from './assets/templates/ipi-portrait.json' with { type: 'json' };
@@ -3509,11 +3509,12 @@ function renderSheetRows() {
   }
   reconcile(sh);
   $('shName').value = sh.name;
-  $('shStage').value = sh.stage;
-  $('shOrient').value = sh.orientation;
+  fillTemplatePicker(sh);
   // Authorship is per sheet; older sheets fall back to the package's.
-  $('shAuthor').value = sh.author ?? doc.package.author ?? '';
-  $('shEdited').value = sh.editDate ?? doc.package.editDate ?? '';
+  buildFields($('shFields'), templateOf(sh), 'sheet', activeSheet, {
+    fallback: { author: doc.package.author, editDate: doc.package.editDate },
+    onEdit: renderSheetPreview
+  });
   $('shUnits').value = sh.units === 'mm' ? 'mm' : 'in';
   syncSelBar(sh);
 
@@ -3929,6 +3930,73 @@ function loadPackageTemplates(files) {
 }
 
 const isLandscape = t => t.page.size[0] > t.page.size[1];
+
+// Fills the Sheets bar's form picker: the built-ins, this machine's templates,
+// and the sheet's own form when it's a version the machine doesn't have.
+// Option values are template hashes. Runs from renderSheets().
+function fillTemplatePicker(sh) {
+  const sel = $('shTemplate');
+  sel.innerHTML = '';
+  const cur = templateOf(sh);
+  const curHash = templateRefOf(cur).hash;
+  const group = (label, list, suffix = '') => {
+    if (!list.length) return;
+    const g = document.createElement('optgroup');
+    g.label = label;
+    for (const t of list) {
+      const o = document.createElement('option');
+      o.value = templateRefOf(t).hash;
+      o.textContent = t.name + suffix;
+      g.appendChild(o);
+    }
+    sel.appendChild(g);
+  };
+  const all = [...templates.values()];
+  group('Built-in', all.filter(t => BUILTIN_IDS.has(t.id)));
+  group('This machine', all.filter(t => !BUILTIN_IDS.has(t.id)));
+  if (!all.some(t => templateRefOf(t).hash === curHash)) {
+    group('This package', [cur], templates.has(cur.id) ? ' (this package’s version)' : '');
+  }
+  sel.value = curHash;
+  sel.title = cur.name;           // the box is narrower than most names
+}
+
+// Builds an input into `host` for each field the form `t` declares in `scope`
+// ('sheet' or 'record'). A built-in key edits the property of that name, a
+// custom key edits `custom`; `fallback` fills a built-in left unset. `target()`
+// is looked up on every keystroke, so an undo between keystrokes can't strand
+// the input on a replaced object. Runs from renderSheetRows() and
+// renderInspRows(), never from an input, so typing never loses focus.
+function buildFields(host, t, scope, target, { fallback = {}, onEdit } = {}) {
+  host.innerHTML = '';
+  const customs = customNames(t, scope);
+  const x = target();
+  for (const f of t.fields ?? []) {
+    if (!f.key.startsWith(`${scope}.`)) continue;
+    const name = f.key.slice(scope.length + 1);
+    const custom = customs.includes(name);
+    if (!custom && !isBuiltinField(f.key)) continue;
+    const cap = document.createElement('label');
+    cap.className = 'cap';
+    const txt = document.createElement('span');
+    txt.textContent = f.label;
+    const inp = document.createElement('input');
+    inp.className = 'hdr-in';
+    if (f.key === 'sheet.editDate') inp.type = 'date';
+    inp.value = (custom ? x.custom?.[name] : x[name] ?? fallback[name]) ?? '';
+    inp.oninput = () => {
+      const y = target();
+      if (!y) return;
+      if (!custom) y[name] = inp.value;
+      else if (inp.value) (y.custom ??= {})[name] = inp.value;
+      else if (y.custom) delete y.custom[name];
+      markDirty();
+      onEdit?.();
+    };
+    cap.append(txt, inp);
+    host.appendChild(cap);
+  }
+}
 
 // part.* bindings, from the open package or, for the Library, a manifest.
 const partBindings = (p = doc.part) => ({
@@ -4495,6 +4563,7 @@ function renderInspRows() {
   const ins = activeInsp();
   $('inspBar').style.display = ins ? 'flex' : 'none';
   $('inspSrc').textContent = '';
+  $('inspFields').innerHTML = '';
   if (!ins) {
     const p = document.createElement('p');
     p.className = 'sh-empty';
@@ -4506,8 +4575,8 @@ function renderInspRows() {
   $('inspFetch').hidden = !recordMode;
   $('inspOpenPkg').hidden = !recordMode;
 
-  $('inspJob').value = ins.jobNumber || '';
-  $('inspMachine').value = ins.machine || '';
+  // No repaint on edit: the drawing pane beside these doesn't show them.
+  buildFields($('inspFields'), templateOf(ins), 'record', activeInsp);
   $('inspSrc').textContent =
     `from \u201c${ins.sheetName}\u201d \u00b7 ${ins.orientation} \u00b7 frozen ${(ins.createdUtc || '').slice(0, 10)}` +
     (onExactTemplate(ins) ? ''
@@ -4518,6 +4587,11 @@ function renderInspRows() {
   const labels = labelsFor(ins);
   const cols = ins.columnCount || 1;
   const bands = ins.bandCount || 1;
+  // Headings and the gage entry follow the record's form. Without a gage column
+  // the slot stays, empty, for the check labels above it.
+  const body = templateOf(ins).body.columns;
+  const gageCol = body.find(c => c.bind === 'gage');
+  const specHead = body.find(c => (c.bind === 'number' || c.bind === 'spec') && c.heading)?.heading;
   $('inspRows').closest('.sh-editor')?.style.setProperty('--ins-cols', cols);
   host.style.setProperty('--ins-cols', cols);
 
@@ -4552,8 +4626,8 @@ function renderInspRows() {
     ch.className = 'ins-row colhead';
     ch.appendChild(el('span', 'num'));
     ch.appendChild(el('span', 'grp-bar'));
-    ch.appendChild(el('span', 'spec', 'Dimension'));
-    ch.appendChild(el('span', 'lbl', 'Gage ID'));
+    ch.appendChild(el('span', 'spec', specHead || 'Dimension'));
+    ch.appendChild(el('span', 'lbl', gageCol ? gageCol.heading || 'Gage ID' : ''));
     ch.appendChild(el('span', 'cells-label', 'Entries'));
     host.appendChild(ch);
 
@@ -4579,7 +4653,7 @@ function renderInspRows() {
       // Shared across bands but editable in each; edits mirror live.
       line.appendChild(sharedSpecInput(row, i));
 
-      line.appendChild(colInput(rb, 'gageId', 'gage', 'gage'));
+      line.appendChild(gageCol ? colInput(rb, 'gageId', 'gage', 'gage') : el('span', 'lbl'));
 
       const cells = document.createElement('div');
       cells.className = 'ins-cells';
@@ -5669,9 +5743,6 @@ $('inspAdd').onclick = () => {
       renderInspect();
     });
 };
-// No repaint: the drawing pane beside these doesn't show them.
-$('inspJob').oninput = e => { const i = activeInsp(); if (i) { i.jobNumber = e.target.value; markDirty(); } };
-$('inspMachine').oninput = e => { const i = activeInsp(); if (i) { i.machine = e.target.value; markDirty(); } };
 $('inspPrint').onclick = () => exportInspPdf();
 $('inspDoc').onchange = e => { inspDocId = e.target.value; inspPageIdx = 0; renderInspDrawing(); };
 $('inspBack').onclick = () => { if (inspPageIdx > 0) { inspPageIdx--; renderInspDrawing(); } };
@@ -5707,22 +5778,18 @@ $('shAdd').onclick = () => {
   renderSheets();
 };
 $('shName').oninput = e => { const s = activeSheet(); if (s) { s.name = e.target.value; markDirty(); renderSheetCards(); } };
-$('shStage').onchange = e => {
+// stage and orientation follow the form, for the Excel Stage column, the cards
+// and older builds.
+$('shTemplate').onchange = e => {
   const s = activeSheet();
-  if (!s) return;
-  s.stage = e.target.value;
-  s.template = builtinRef(s.stage, s.orientation);
+  const t = templatesByHash.get(e.target.value) || packageTemplates.get(e.target.value);
+  if (!s || !t) return;
+  pushHistory();
+  s.template = templateRefOf(t);
+  if (t.stage) s.stage = t.stage;
+  s.orientation = isLandscape(t) ? 'landscape' : 'portrait';
   markDirty(); renderSheets();
 };
-$('shOrient').onchange = e => {
-  const s = activeSheet();
-  if (!s) return;
-  s.orientation = e.target.value;
-  s.template = builtinRef(s.stage, s.orientation);
-  markDirty(); renderSheetPreview();
-};
-$('shAuthor').oninput = e => { const s = activeSheet(); if (s) { s.author = e.target.value; markDirty(); renderSheetPreview(); } };
-$('shEdited').oninput = e => { const s = activeSheet(); if (s) { s.editDate = e.target.value; markDirty(); renderSheetPreview(); } };
 $('shUnits').onchange = e => {
   const s = activeSheet();
   if (!s) return;

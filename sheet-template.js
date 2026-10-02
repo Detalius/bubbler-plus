@@ -171,6 +171,9 @@ export function readCustom(v) {
   return out;
 }
 
+// Whether a field key is one of Bubbler+'s own that a template may declare.
+export const isBuiltinField = key => BUILTIN_FIELDS.has(key);
+
 // The custom field names a template declares in one scope, 'sheet' or 'record'.
 export const customNames = (t, scope) => (t?.fields ?? [])
   .map(f => f?.key)
