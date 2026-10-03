@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <!-- Bubbler+ Forms: a form's grid with the Bubbler balloon on it. -->
+  <rect x="8" y="8" width="240" height="240" rx="44" fill="#2d7dd2"/>
+  <rect x="44" y="40" width="168" height="184" rx="14" fill="#ffffff"/>
+  <g stroke="#2d7dd2" stroke-width="7" stroke-linecap="round" opacity=".55">
+    <path d="M44 96h168M44 136h168M44 176h168"/>
+    <path d="M100 96v128M156 96v128"/>
+  </g>
+  <rect x="44" y="40" width="168" height="56" rx="14" fill="#1a4f8a"/>
+  <rect x="44" y="76" width="168" height="20" fill="#1a4f8a"/>
+  <g fill="none" stroke="#ffffff" stroke-linecap="round">
+    <circle cx="128" cy="62" r="13" stroke-width="7"/>
+    <path d="M128 75v12" stroke-width="7"/>
+  </g>
+</svg>

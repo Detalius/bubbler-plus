@@ -19,6 +19,10 @@ code. Both are private and gitignored.
 | `renderer.js` | The workspace (~7.2k lines), an ES module. Sections are marked by `// ----` banners; declarations sit at the top of their section. |
 | `library.js` | The Library (Quick Find, previews, printing). Reads packages, never writes them; borrows rendering through `window.BubblerSheets`. |
 | `sheet-template.js` | Pure template logic: validation, bindings, page arithmetic, pagination, hashing, package template storage. Shared by the renderer, the Library and the tests. |
+| `sheet-page.js` | `buildPage()` and `printCss()`: one printed page of any form, as HTML. Every preview, PDF and print comes from here, and so does the form editor's preview. |
+| `forms.html`, `forms.js` | The form editor, **Bubbler+ Forms**: `Bubbler+.exe --forms` opens this page instead of index.html, so nothing package-shaped (autosave, recovery, locks, updates) runs in it. Its own menu, AppUserModelId and icon (`build/installer.nsh` makes its shortcut). |
+| `form-model.js` | Pure: the editor's one-grid model and its two-way map to the template format, the edits, Excel import's layout and the suggestions. |
+| `xlsx-read.js` | Pure: reads one worksheet's look (text, merges, sizes, fills, fonts) for the editor's import. The unzip is passed in. |
 | `xlsx-append.js` | Appends sheets to a workbook by zip surgery, never by rebuilding it. |
 | `index.html` | All markup and all CSS. |
 | `assets/templates/` | The eight built-in sheet templates. |
@@ -29,14 +33,17 @@ code. Both are private and gitignored.
 
 ```bash
 npm start                 # run the app
+npm start -- --forms      # run the form editor
 npm test                  # unit tests (Node 22+)
 bash tools/check.sh       # module-mode parse, duplicate declarations, ids, IPC balance, CSS
 node tools/e2e/fixtures.js && python tools/e2e/run.py   # the real app, headless
+python tools/e2e/forms.py                                # the form editor, headless
 npm run dist              # installer into dist/
 ```
 
 Run `npm test` and `check.sh` after every change. Run the e2e suite after
-anything touching save, open, templates, records or the Library.
+anything touching save, open, templates, records or the Library, and
+`forms.py` after anything touching the editor, `form-model.js` or `sheet-page.js`.
 
 ## Rules that have each prevented a real bug
 

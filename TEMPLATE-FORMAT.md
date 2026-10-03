@@ -9,7 +9,10 @@ Templates are JSON. The built-in forms ship in the same format
 (`assets/templates/*.json`), which makes them the best examples to copy from.
 A shop's own templates go in the `templates` folder inside the data folder
 (`%APPDATA%\Bubbler+\templates`); each is checked when Bubbler+ starts, and
-one that fails is left out, with the reason reported.
+one that fails is left out, with the reason reported. The form editor
+(Bubbler+ Forms) writes this format for you, from a spreadsheet-like grid or
+an imported Excel workbook; this document is for reading or writing it by
+hand.
 
 A package carries a copy of every non-built-in template its sheets and records
 use, in a `templates/` folder inside the `.insp`, so it prints the same on a
@@ -242,4 +245,3 @@ These are planned and will not break version 1 templates:
 - Tolerance bindings (`tol.upper`, `tol.lower` and so on) once tolerances are
   stored separately from the dimension.
 - Custom per-characteristic columns.
-- Importing a template's shape from an Excel workbook.

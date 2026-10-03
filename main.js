@@ -48,6 +48,17 @@ if (!process.env.UV_THREADPOOL_SIZE) {
 
 const { app, BrowserWindow, Menu, ipcMain, dialog, shell } = require('electron');
 app.setPath('userData', DATA_DIR);
+
+// The form editor is a second front door into this same executable:
+// `Bubbler+.exe --forms` (the installer's "Bubbler+ Forms" shortcut) opens
+// forms.html instead of the app. It is its own page, so nothing package-shaped
+// (autosave, recovery, locks, the update check, the launcher) ever starts in
+// it. Its own AppUserModelId makes Windows treat it as a separate app on the
+// taskbar; the main one matches build.appId, as the installer's shortcut does.
+const FORMS_MODE = process.argv.includes('--forms');
+if (process.platform === 'win32') {
+  app.setAppUserModelId(FORMS_MODE ? 'com.detalius.bubblerplus.forms' : 'com.detalius.bubblerplus');
+}
 // Chromium's own caches (GPU, code cache, storage) go in a subfolder, so the
 // data folder a user opens holds this app's files and not a pile of Chromium's.
 app.setPath('sessionData', path.join(DATA_DIR, 'Session'));
@@ -113,6 +124,41 @@ ipcMain.handle('templates:list', async () => {
     catch (err) { out.push({ file: name, error: err.message }); }
   }
   return out;
+});
+
+// Saves a form from the editor into the templates folder. `file` names the file
+// it was opened from, so a shop's own name (shop-ipi.json) is kept; a new form
+// gets <id>.json, never overwriting another. Written beside and renamed over, so
+// a crash mid-write leaves the old form intact.
+ipcMain.handle('templates:save', async (_event, { file, id, text }) => {
+  const dir = path.join(appDir(), 'templates');
+  try {
+    JSON.parse(text);
+    await fs.mkdir(dir, { recursive: true });
+    let name = file;
+    if (name != null && !/^[\w .()-]+\.json$/i.test(name)) throw new Error('Bad file name');
+    if (name == null) {
+      const stem = String(id || 'form').replace(/[^a-z0-9-]/g, '') || 'form';
+      name = `${stem}.json`;
+      for (let n = 2; fsSync.existsSync(path.join(dir, name)); n++) name = `${stem}-${n}.json`;
+    }
+    const target = path.join(dir, name);
+    const tmp = `${target}.bubbler-tmp`;
+    await fs.writeFile(tmp, text, 'utf8');
+    await fs.rename(tmp, target);
+    return { ok: true, file: name };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+// Settings' "Open the form editor": a second process through the same front
+// door the shortcut uses. There is no single-instance lock, so both run at once.
+ipcMain.handle('forms:open', () => {
+  const { spawn } = require('child_process');
+  const args = app.isPackaged ? ['--forms'] : [app.getAppPath(), '--forms'];
+  spawn(process.execPath, args, { detached: true, stdio: 'ignore' }).unref();
+  return { ok: true };
 });
 
 // Opens the templates folder from Settings, creating it first: a shop's first
@@ -598,6 +644,7 @@ async function publishSidecar(entry) {
     drawings: (entry.drawings || []).map(d => ({ id: d.id, sha256: d.sha256, label: d.label })),
     sheets: entry.sheets || 0,
     inspections: entry.inspections || 0,
+    forms: formUsage(entry.forms),
     updatedUtc: new Date().toISOString()
   };
 
@@ -642,6 +689,53 @@ async function publishSidecar(entry) {
     return { ok: false, reason: err.message };
   }
 }
+
+// How many of a package's sheets use each form, by template id: what the form
+// editor counts before saving over a form in use. Sheets from before templates
+// carry no reference; they are on a built-in, which the editor never saves.
+function formsOfSheets(sheets) {
+  const out = {};
+  for (const s of Array.isArray(sheets) ? sheets : []) {
+    const id = s?.template?.id;
+    if (typeof id === 'string' && /^[a-z0-9-]+$/.test(id)) out[id] = (out[id] || 0) + 1;
+  }
+  return out;
+}
+// The same map as it arrives from the renderer: ids and whole counts only.
+function formUsage(v) {
+  const out = {};
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return out;
+  for (const [id, n] of Object.entries(v)) {
+    if (/^[a-z0-9-]+$/.test(id) && Number.isInteger(n) && n > 0) out[id] = n;
+  }
+  return out;
+}
+
+// Sheets using one form across both indexes. Records written before `forms`
+// existed can't be counted; `uncounted` says how many, and a rebuild fixes them.
+async function countFormUsage(id) {
+  let sheets = 0, packages = 0, uncounted = 0;
+  const seen = new Set();
+  for (const { root } of indexRoots()) {
+    let names = [];
+    try {
+      names = await withTimeout(fs.readdir(path.join(root, 'pkg')), 6000, 'Index read');
+    } catch {
+      continue;
+    }
+    for (const n of names) {
+      if (!n.endsWith('.json')) continue;
+      const rec = await readJson(path.join(root, 'pkg', n));
+      if (!rec || rec.missing || seen.has(rec.packageId)) continue;
+      seen.add(rec.packageId);
+      if (!rec.forms || typeof rec.forms !== 'object') { if (rec.sheets) uncounted++; continue; }
+      const k = Object.hasOwn(rec.forms, id) ? rec.forms[id] : 0;
+      if (Number.isInteger(k) && k > 0) { sheets += k; packages++; }
+    }
+  }
+  return { sheets, packages, uncounted };
+}
+ipcMain.handle('index:form-usage', (_event, id) => countFormUsage(String(id || '')));
 
 // A sidecar is only trusted if the package it names is still there.
 async function sidecarIfLive(record) {
@@ -762,6 +856,7 @@ async function readPackage(file) {
     })),
     sheets: (m.inspectionSheets || []).length,
     inspections: (m.inspections || []).length,
+    forms: formsOfSheets(m.inspectionSheets),
     scannedUtc: new Date().toISOString()
   };
 }
@@ -1475,6 +1570,7 @@ ipcMain.handle('recents:clear', async () => writeRecents([]));
 // ---------------------------------------------------------------------------
 function buildMenu() {
   const isMac = process.platform === 'darwin';
+  if (FORMS_MODE) return buildFormsMenu(isMac);
 
   const template = [
     ...(isMac ? [{ role: 'appMenu' }] : []),
@@ -1523,6 +1619,45 @@ function buildMenu() {
     }
   ];
 
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
+// The form editor's menu: only what the editor does.
+function buildFormsMenu(isMac) {
+  const template = [
+    ...(isMac ? [{ role: 'appMenu' }] : []),
+    {
+      label: 'File',
+      submenu: [
+        { label: 'New Form', accelerator: 'CmdOrCtrl+N', click: () => send('new') },
+        { label: 'Open Form…', accelerator: 'CmdOrCtrl+O', click: () => send('open') },
+        { label: 'Import from Excel…', click: () => send('import') },
+        { type: 'separator' },
+        { label: 'Save', accelerator: 'CmdOrCtrl+S', click: () => send('save') },
+        { label: 'Save As New Form…', accelerator: 'CmdOrCtrl+Shift+S', click: () => send('saveas') },
+        { type: 'separator' },
+        { label: 'Open Forms Folder', click: () => send('folder') },
+        { type: 'separator' },
+        isMac ? { role: 'close' } : { role: 'quit' }
+      ]
+    },
+    {
+      label: 'Edit',
+      submenu: [
+        { label: 'Undo', accelerator: 'CmdOrCtrl+Z', click: () => send('undo') },
+        { label: 'Redo', accelerator: 'CmdOrCtrl+Y', click: () => send('redo') }
+      ]
+    },
+    {
+      label: 'View',
+      submenu: [
+        { role: 'reload' },
+        { role: 'toggleDevTools' },
+        { type: 'separator' },
+        { role: 'togglefullscreen' }
+      ]
+    }
+  ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
@@ -1610,8 +1745,10 @@ ipcMain.handle('update:install', () => {
 // ---------------------------------------------------------------------------
 function createWindow() {
   win = new BrowserWindow({
-    width: 1500,
-    height: 980,
+    width: FORMS_MODE ? 1440 : 1500,
+    height: FORMS_MODE ? 920 : 980,
+    title: FORMS_MODE ? 'Bubbler+ Forms' : 'Bubbler+',
+    ...(FORMS_MODE ? { icon: path.join(__dirname, 'assets', 'forms-icon.png') } : {}),
     backgroundColor: '#2b2b2b',
     webPreferences: {
       contextIsolation: true,
@@ -1619,7 +1756,7 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js')
     }
   });
-  win.loadFile('index.html');
+  win.loadFile(FORMS_MODE ? 'forms.html' : 'index.html');
   win.on('close', e => {
     if (allowClose) return;
     e.preventDefault();

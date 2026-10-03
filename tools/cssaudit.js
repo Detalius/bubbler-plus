@@ -1,14 +1,19 @@
-// CSS classes defined in index.html but never applied anywhere.
+// CSS classes defined in a page but never applied anywhere. With no arguments it
+// audits index.html against the app's scripts; `node tools/cssaudit.js page.html
+// a.js b.js` audits another page (the form editor).
 // Kept as its own file: the regexes need backslashes that do not survive a
 // shell heredoc, which produced a check that flagged every class in the app.
 const fs = require('fs');
-const html = fs.readFileSync('index.html', 'utf8');
-const js = ['renderer.js', 'library.js']
+const [page = 'index.html', ...scripts] = process.argv.slice(2);
+const html = fs.readFileSync(page, 'utf8');
+const js = (scripts.length ? scripts : ['renderer.js', 'library.js', 'sheet-page.js'])
   .map(f => fs.readFileSync(f, 'utf8')).join('\n');
 
 const style = html.slice(html.indexOf('<style>'), html.indexOf('</style>'));
+// url(...) holds file names (Verisurf.ttf), not classes.
+const rules = style.replace(/url\([^)]*\)/g, '');
 const body = html.slice(html.indexOf('</style>'));
-const classes = new Set([...style.matchAll(/\.([a-zA-Z][\w-]*)/g)].map(m => m[1]));
+const classes = new Set([...rules.matchAll(/\.([a-zA-Z][\w-]*)/g)].map(m => m[1]));
 
 const unused = [...classes].filter(c => {
   const inHtml = new RegExp('class="[^"]*\\b' + c + '\\b').test(body);

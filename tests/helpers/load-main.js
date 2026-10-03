@@ -6,13 +6,14 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const EXPORTS = ['crawl', 'config', 'writeUnique', 'drawingSetHash', 'samePath', 'readPackage'];
+const EXPORTS = ['crawl', 'config', 'writeUnique', 'drawingSetHash', 'samePath', 'readPackage',
+                 'publishSidecar', 'countFormUsage', 'formsOfSheets'];
 
 function loadMain() {
   const noop = () => {};
   const electron = {
     app: {
-      setPath: noop, on: noop, isPackaged: false,
+      setPath: noop, on: noop, isPackaged: false, setAppUserModelId: noop,
       getPath: () => os.tmpdir(), getVersion: () => '0.0.0',
       whenReady: () => new Promise(() => {})     // never boots a window
     },

@@ -36,6 +36,11 @@
       "library.js",
       "xlsx-append.js",
       "sheet-template.js",
+      "sheet-page.js",
+      "form-model.js",
+      "xlsx-read.js",
+      "forms.html",
+      "forms.js",
       "index.html",
       "package.json",
       "assets/**/*",
@@ -58,8 +63,12 @@
     },
     "nsis": {
       "oneClick": true,
-      "perMachine": false
+      "perMachine": false,
+      "include": "build/installer.nsh"
     },
+    "extraResources": [
+      { "from": "build/forms.ico", "to": "forms.ico" }
+    ],
     "artifactName": "Bubbler-Plus-Setup-${version}.${ext}",
     "publish": [
       {

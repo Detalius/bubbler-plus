@@ -108,3 +108,14 @@ test('final progress reports folders listed', async t => {
   assert.ok(last.scanned > 10);
   assert.equal(last.unreadable, 0);
 });
+
+test('a crawled package carries its sheets per form, for the form editor', async t => {
+  const s = makeShare(t);
+  s.pkg('Customer 01/PN-0101/QC/forms.insp', { inspectionSheets: [
+    { template: { id: 'shop-a', hash: '0123456789abcdef' } },
+    { template: { id: 'shop-a', hash: 'fedcba9876543210' } },
+    {}
+  ] });
+  const [e] = await crawl(s.root, 4, () => {});
+  assert.deepEqual(e.forms, { 'shop-a': 2 });
+});

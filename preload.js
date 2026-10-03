@@ -24,6 +24,8 @@ contextBridge.exposeInMainWorld('api', {
   dataFolder: () => ipcRenderer.invoke('app:data-folder'),
   listTemplates: () => ipcRenderer.invoke('templates:list'),
   openTemplatesFolder: () => ipcRenderer.invoke('templates:open-folder'),
+  saveTemplate: form => ipcRenderer.invoke('templates:save', form),
+  openFormEditor: () => ipcRenderer.invoke('forms:open'),
   appVersion: () => ipcRenderer.invoke('app:version'),
   setConfig: patch => ipcRenderer.invoke('config:set', patch),
   testPath: dir => ipcRenderer.invoke('config:test-path', dir),
@@ -32,6 +34,7 @@ contextBridge.exposeInMainWorld('api', {
   identity: () => ipcRenderer.invoke('identity:get'),
   publishSidecar: entry => ipcRenderer.invoke('sidecar:publish', entry),
   indexStats: () => ipcRenderer.invoke('index:stats'),
+  formUsage: id => ipcRenderer.invoke('index:form-usage', id),
   indexFlagMissing: id => ipcRenderer.invoke('index:flag-missing', id),
   indexPurgeMissing: () => ipcRenderer.invoke('index:purge-missing'),
   indexIdTaken: (packageId, file) =>

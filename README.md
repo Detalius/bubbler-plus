@@ -129,9 +129,20 @@ This folder survives updates and uninstalls. Deleting it resets Bubbler+ to fact
 
 ## Your own forms
 
-Every printed sheet is drawn from a form template. The eight built-in forms cover in-process, first article, multi-part first article and final inspection, each in portrait and landscape. A shop can add its own: a template is a `.json` file in the `templates` folder of your data folder. **Settings > Sheet templates** opens that folder, shows how many of your forms loaded, and has **Reload** for picking up a new or edited file without restarting.
+Every printed sheet is drawn from a form template. The eight built-in forms cover in-process, first article, multi-part first article and final inspection, each in portrait and landscape. A shop can add its own, and the easiest way is the form editor.
 
-A form decides the sheet's whole layout: its page, the header grid, which header fields you fill in (job number, machine, or anything your shop needs, like a heat lot), the table's columns, and how many check columns it repeats. Bubbler+ checks every template when it loads. One with a mistake is left out, and you're told which file and why — the other forms keep working. The full format, with examples, is in [TEMPLATE-FORMAT.md](TEMPLATE-FORMAT.md); the built-in forms in `assets/templates/` are written in it and make good starting points.
+**Bubbler+ Forms** is installed beside Bubbler+ as a second shortcut (or open it from **Settings > Sheet templates > Open the form editor**). It works like a spreadsheet:
+
+- **Start** from a new form, a copy of a built-in, or **File > Import from Excel** to bring your existing `.xlsx` form across: text, merged cells, column widths, row heights, fills and fonts.
+- **Lay it out** the way you would in Excel: type into cells, drag column and row borders, merge, bold, fill, align.
+- **The table line** marks where the header ends and the table of characteristics begins. Drag it to the right row. The row marked ↻ is the one that repeats, once per characteristic.
+- **Designate** what each cell holds: pick Part Number, Job Number, Dimension, Checks… from the palette and paint the cells. **New field…** adds one your shop needs, like a heat lot. After an import, **Suggest** reads your labels ("Part No.:", "Gage ID") and offers the right field for the cell beside each; click a dashed suggestion to accept it, or **Accept all**.
+- The **preview** is drawn exactly as the sheet will print. Tick **Show sample values** to see every field filled in.
+- **Save** is ready when the strip under the grid says so; anything wrong is listed there, and clicking it takes you to the cell. If sheets already use the form you're changing, you're told how many first. Their inspection records keep the form they were filled on.
+
+Saved forms go in the `templates` folder of your data folder. In Bubbler+, **Settings > Sheet templates** shows how many of your forms loaded and has **Reload** for picking up a new or edited form without restarting.
+
+A form decides the sheet's whole layout: its page, the header grid, which header fields you fill in (job number, machine, or anything your shop needs, like a heat lot), the table's columns, and how many check columns it repeats. Bubbler+ checks every template when it loads. One with a mistake is left out, and you're told which file and why — the other forms keep working. Templates are plain JSON and can be written by hand too: the full format, with examples, is in [TEMPLATE-FORMAT.md](TEMPLATE-FORMAT.md), and the built-in forms in `assets/templates/` are written in it.
 
 A package carries a copy of every non-built-in form its sheets use, and every inspection record keeps the exact form it was filled on. So a package prints the same on a machine that doesn't have your templates, and an old record still reprints on its original form after the template is changed.
 
@@ -148,6 +159,7 @@ git clone https://github.com/Detalius/bubbler-plus.git
 cd bubbler-plus
 npm install
 npm start           # run it
+npm start -- --forms   # run the form editor
 npm run dist        # build an installer into dist/
 npm test            # run the tests (Node 22 or newer)
 ```

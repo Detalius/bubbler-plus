@@ -1,0 +1,289 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Bubbler+ Forms</title>
+<style>
+  /* The symbol font, for the preview's callout column. Declared here, not in
+     the preview's shadow root: Chromium ignores @font-face inside one. */
+  @font-face {
+    font-family: 'VerisurfGDT';
+    src: url('./assets/Verisurf.ttf') format('truetype');
+    font-display: block;
+  }
+  :root {
+    --bg: #2b2b2b; --panel: #232323; --edge: #3d3d3d; --edge-soft: #353535;
+    --ink: #dcdcdc; --ink-dim: #8d8d8d; --ctl: #383838; --ctl-hi: #464646;
+    --accent: #2d7dd2; --accent-hi: #4a97e6; --warn: #e0a030; --bad: #e06060; --good: #5cb85c;
+    /* Designation colours. Never the only signal: every painted cell has a chip. */
+    --des-field: #2d7dd2; --des-custom: #9a5cd0; --des-body: #2f9e6e; --des-logo: #c98a1c;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 13px/1.45 system-ui, -apple-system, sans-serif;
+         background: var(--bg); color: var(--ink); height: 100vh; overflow: hidden;
+         display: flex; flex-direction: column; }
+  button, select, input { font: inherit; color: var(--ink);
+    background: var(--ctl); border: 1px solid var(--edge); border-radius: 4px; padding: 3px 8px; }
+  button { cursor: pointer; }
+  button:hover:not(:disabled) { background: var(--ctl-hi); }
+  button:disabled { opacity: .38; cursor: default; }
+  button.on { background: var(--accent); border-color: var(--accent-hi); color: #fff; }
+  .primary { background: var(--accent); border-color: var(--accent-hi); color: #fff; }
+  .primary:hover:not(:disabled) { background: var(--accent-hi); }
+  input[type=number] { width: 64px; }
+  input[type=color] { width: 30px; height: 26px; padding: 1px 2px; vertical-align: middle; }
+
+  /* ---------------- Ribbon ---------------- */
+  #ribbon { display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap;
+            padding: 8px 12px; background: var(--panel); border-bottom: 1px solid var(--edge); }
+  .grp { display: flex; flex-direction: column; gap: 3px; }
+  .grp > .row { display: flex; gap: 4px; align-items: center; }
+  .grp > .cap { font-size: 10.5px; color: var(--ink-dim); text-transform: uppercase; letter-spacing: .06em; }
+  .sep { width: 1px; align-self: stretch; background: var(--edge); }
+  #fName { width: 260px; }
+  .grow { flex: 1; }
+  .tb { min-width: 30px; padding: 3px 6px; }
+  .tb b, .tb i { pointer-events: none; }
+  #saveBtn { min-width: 90px; }
+
+  /* ---------------- Workspace ---------------- */
+  #work { flex: 1; min-height: 0; display: flex; }
+  #palette { width: 210px; flex: none; background: var(--panel); border-right: 1px solid var(--edge);
+             overflow-y: auto; padding: 10px; }
+  #palette[hidden] { display: none; }
+  #palette h3, #side h3 { margin: 10px 0 6px; font-size: 11px; color: var(--ink-dim);
+                          text-transform: uppercase; letter-spacing: .07em; font-weight: 600; }
+  #palette h3:first-child { margin-top: 0; }
+  .brush { display: flex; align-items: center; gap: 7px; width: 100%; text-align: left;
+           margin-bottom: 3px; padding: 4px 7px; background: transparent; border-color: transparent; }
+  .brush.on { background: var(--ctl-hi); border-color: var(--accent-hi); color: var(--ink); }
+  .brush .sw { width: 12px; height: 12px; border-radius: 3px; flex: none; }
+  .brush .tick { margin-left: auto; color: var(--good); font-size: 12px; }
+  .hint { color: var(--ink-dim); font-size: 12px; margin: 6px 0 10px; }
+
+  #sheet { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  #gridWrap { flex: 1; min-height: 0; overflow: auto; background: #1d1d1d; position: relative; }
+  #gridBox { position: relative; display: inline-block; margin: 0 170px 40px 0; }
+  #grid { border-collapse: collapse; table-layout: fixed; background: #fff; color: #000;
+          font-family: Arial, sans-serif; user-select: none; }
+  #grid th { background: #e9e9e9; color: #444; font: 11px system-ui, sans-serif; border: 1px solid #c4c4c4;
+             position: relative; padding: 0; text-align: center; overflow: hidden; }
+  #grid th.colhead { height: 20px; cursor: s-resize; }
+  #grid th.rowhead { cursor: e-resize; }
+  #grid th.corner { cursor: default; }
+  #grid th.sel-h { background: #cfe0f5; color: #1a4f8a; }
+  #grid tr.head th.rowhead { background: #e2efe7; }
+  #grid tr.data th.rowhead { background: #cfe8da; color: #1f6b47; font-weight: 600; }
+  #grid tr.extra th.rowhead, #grid tr.ghost th.rowhead { background: #f1f1f1; color: #aaa; }
+  .rz { position: absolute; z-index: 2; }
+  /* Inside the header cell: it clips, so a handle hanging past it can't be grabbed. */
+  .colhead .rz { right: 0; top: 0; bottom: 0; width: 6px; cursor: col-resize; }
+  .rowhead .rz { left: 0; right: 0; bottom: 0; height: 5px; cursor: row-resize; }
+  #grid td { border: 1px solid #c8c8c8; padding: 0 3px; overflow: hidden; vertical-align: middle;
+             position: relative; white-space: pre-wrap; word-break: break-word; cursor: cell;
+             font-size: 8pt; line-height: 1.15; }
+  #grid td.nowrap { white-space: pre; }
+  #grid tr.extra td { opacity: .35; background-image: repeating-linear-gradient(135deg, transparent 0 6px, rgba(0,0,0,.06) 6px 7px); }
+  #grid tr.ghost td { opacity: .35; border-style: dashed; cursor: default; }
+  #grid td.sel { box-shadow: inset 0 0 0 999px rgba(45,125,210,.16); }
+  #grid td.active { outline: 2px solid #1a6fd0; outline-offset: -2px; }
+  #grid td.drop { outline: 2px dashed #1a6fd0; outline-offset: -3px; }
+  .chip { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+          font: 600 10px/1.5 system-ui, sans-serif; color: #fff; border-radius: 8px; padding: 0 6px;
+          vertical-align: middle; }
+  .chip.field { background: var(--des-field); }
+  .chip.custom { background: var(--des-custom); }
+  .chip.body { background: var(--des-body); }
+  .chip.logo { background: var(--des-logo); }
+  body.painting #grid td.des-field { box-shadow: inset 0 0 0 999px rgba(45,125,210,.18); }
+  body.painting #grid td.des-custom { box-shadow: inset 0 0 0 999px rgba(154,92,208,.18); }
+  body.painting #grid td.des-body { box-shadow: inset 0 0 0 999px rgba(47,158,110,.2); }
+  body.painting #grid td.des-logo { box-shadow: inset 0 0 0 999px rgba(201,138,28,.2); }
+  body.painting #grid td { cursor: crosshair; }
+  .rep { position: absolute; right: 2px; bottom: 1px; font: 600 9px system-ui, sans-serif; color: #1f6b47; }
+
+  /* The table line: Excel's page-break gesture. Above it is the header. */
+  #tline { position: absolute; left: 0; right: 0; height: 0; border-top: 4px solid #1a6fd0;
+           cursor: ns-resize; z-index: 5; }
+  #tline::before { content: ''; position: absolute; left: 0; right: 0; top: -8px; height: 14px; }
+  /* The handle sits past the grid's right edge, so it never covers a cell. */
+  #tline span { position: absolute; left: calc(100% + 6px); top: -12px; background: #1a6fd0; color: #fff;
+                font: 600 11px system-ui, sans-serif; padding: 2px 9px; border-radius: 4px;
+                white-space: nowrap; cursor: ns-resize; }
+  #tline span::before { content: ''; position: absolute; left: -6px; top: 7px;
+                        border: 5px solid transparent; border-left: 0; border-right-color: #1a6fd0; }
+  #tline.dragging { border-top-style: dashed; }
+  #hline { position: absolute; left: 0; right: 0; height: 0; border-top: 2px dashed #2f9e6e;
+           z-index: 4; pointer-events: none; }
+  #cellEdit { position: absolute; z-index: 10; border: 2px solid #1a6fd0; outline: none; padding: 0 3px;
+              background: #fff; color: #000; font-family: Arial, sans-serif; resize: none; overflow: hidden;
+              border-radius: 0; line-height: 1.15; }
+
+  /* Suggestions: dashed, and a question until accepted. */
+  #suggBar { display: flex; align-items: center; gap: 8px; padding: 6px 12px; background: #23303f;
+             border-bottom: 1px solid var(--edge); font-size: 12.5px; }
+  #suggBar[hidden] { display: none; }
+  #grid td.sugg { outline: 2px dashed #1a6fd0; outline-offset: -3px; }
+  .chip.sugg { background: #fff; color: #1a6fd0; border: 1px dashed #1a6fd0; cursor: pointer; }
+  .chip.sugg:hover { background: #1a6fd0; color: #fff; }
+  #problems .trim { margin-left: 8px; padding: 1px 8px; font-size: 12px; }
+  #problems { flex: none; max-height: 120px; overflow-y: auto; background: var(--panel);
+              border-top: 1px solid var(--edge); padding: 6px 12px; font-size: 12.5px; }
+  #problems .ok { color: var(--good); }
+  #problems .p { display: block; color: var(--warn); cursor: pointer; padding: 1px 0;
+                 background: none; border: none; text-align: left; }
+  #problems .p:hover { text-decoration: underline; }
+  #problems .p.nocell { cursor: default; text-decoration: none; }
+
+  #side { width: 440px; flex: none; background: var(--panel); border-left: 1px solid var(--edge);
+          display: flex; flex-direction: column; min-height: 0; }
+  #side .bar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--edge); }
+  #side .bar label { display: flex; gap: 5px; align-items: center; cursor: pointer; }
+  #prevHost { flex: 1; min-height: 0; overflow: auto; background: #3a3a3a; padding: 14px; }
+  #checklist { flex: none; max-height: 42%; overflow-y: auto; padding: 4px 12px 10px;
+               border-top: 1px solid var(--edge); font-size: 12.5px; }
+  #checklist .it { display: flex; gap: 6px; padding: 1px 0; }
+  #checklist .it .m { width: 14px; text-align: center; }
+  #checklist .it.yes .m { color: var(--good); }
+  #checklist .it.no { color: var(--ink-dim); }
+  #checklist .it.req.no { color: var(--warn); }
+
+  /* ---------------- Dialogs ---------------- */
+  .modal-back { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex;
+                align-items: center; justify-content: center; z-index: 50; }
+  .modal-back[hidden] { display: none; }
+  .dialog { background: var(--panel); border: 1px solid var(--edge); border-radius: 8px; padding: 18px 20px;
+            width: 520px; max-width: calc(100vw - 32px); max-height: calc(100vh - 48px); overflow-y: auto;
+            box-shadow: 0 8px 40px rgba(0,0,0,.5); }
+  .dialog h2 { margin: 0 0 10px; font-size: 16px; }
+  .dialog p { margin: 6px 0; color: var(--ink); }
+  .dialog .acts { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+  .dialog label.f { display: block; margin: 10px 0 4px; color: var(--ink-dim); font-size: 12px; }
+  .dialog input[type=text] { width: 100%; }
+  .dialog .opt { display: flex; gap: 8px; align-items: flex-start; margin: 6px 0; cursor: pointer; }
+  .dialog .opt small { display: block; color: var(--ink-dim); }
+  .dialog h3.dh { margin: 12px 0 6px; font-size: 11px; color: var(--ink-dim);
+                  text-transform: uppercase; letter-spacing: .07em; font-weight: 600; }
+  .dialog .hint { text-transform: none; letter-spacing: 0; font-weight: 400; }
+  .flist { margin: 4px 0 12px; }
+  .flist button { display: flex; width: 100%; text-align: left; margin-bottom: 4px; gap: 8px; }
+  .flist button .k { margin-left: auto; color: var(--ink-dim); font-size: 12px; }
+  .flist .bad { color: var(--bad); font-size: 12px; padding: 2px 8px; }
+
+  #toast { position: fixed; left: 50%; bottom: 140px; transform: translateX(-50%); background: #111;
+           border: 1px solid var(--edge); color: var(--ink); padding: 8px 14px; border-radius: 6px;
+           z-index: 60; max-width: 640px; box-shadow: 0 4px 20px rgba(0,0,0,.5); }
+  #toast[hidden] { display: none; }
+</style>
+</head>
+<body>
+<div id="ribbon">
+  <div class="grp">
+    <span class="cap">Form name</span>
+    <div class="row"><input id="fName" type="text" spellcheck="false" placeholder="Form name"></div>
+  </div>
+  <div class="sep"></div>
+  <div class="grp">
+    <span class="cap">Text</span>
+    <div class="row">
+      <button id="bBold" class="tb" title="Bold (Ctrl+B)"><b>B</b></button>
+      <button id="bItalic" class="tb" title="Italic (Ctrl+I)"><i>I</i></button>
+      <select id="bSize" title="Font size (points)"></select>
+      <button id="bWrap" class="tb" title="Wrap text onto more lines">Wrap</button>
+      <button id="bSymbol" class="tb" title="Use the GD&amp;T symbol font (for dimension columns)">GD&amp;T</button>
+    </div>
+  </div>
+  <div class="grp">
+    <span class="cap">Align &amp; fill</span>
+    <div class="row">
+      <button id="bLeft" class="tb" title="Align left">&#x2BC7;</button>
+      <button id="bCenter" class="tb" title="Centre">&#x2261;</button>
+      <button id="bRight" class="tb" title="Align right">&#x2BC8;</button>
+      <input id="bFill" type="color" value="#d9d9d9" title="Fill colour">
+      <button id="bFillApply" class="tb" title="Fill the selection">Fill</button>
+      <button id="bNoFill" class="tb" title="No fill">None</button>
+    </div>
+  </div>
+  <div class="grp">
+    <span class="cap">Cells</span>
+    <div class="row">
+      <button id="bMerge" class="tb" title="Merge the selected cells into one">Merge</button>
+      <button id="bUnmerge" class="tb" title="Split merged cells back apart">Unmerge</button>
+      <button id="bInsRow" class="tb" title="Insert a row above the selection">+ Row</button>
+      <button id="bDelRow" class="tb" title="Delete the selected rows">&minus; Row</button>
+      <button id="bInsCol" class="tb" title="Insert a column left of the selection">+ Col</button>
+      <button id="bDelCol" class="tb" title="Delete the selected columns">&minus; Col</button>
+    </div>
+  </div>
+  <div class="grp">
+    <span class="cap">Size (<span id="uCap">in</span>)</span>
+    <div class="row">
+      <label title="Width of the selected column">W <input id="bW" type="number" step="0.01" min="0.05"></label>
+      <label title="Height of the selected row">H <input id="bH" type="number" step="0.01" min="0.05"></label>
+    </div>
+  </div>
+  <div class="sep"></div>
+  <div class="grp">
+    <span class="cap">Table</span>
+    <div class="row">
+      <label title="Rows in the table's heading, above the row that repeats">Heading rows <input id="tHead" type="number" min="1" max="9" step="1" style="width:46px"></label>
+      <label id="tChecksL" title="How many check columns sit side by side">Checks &times; <input id="tChecks" type="number" min="1" max="40" step="1" style="width:52px"></label>
+      <select id="tBands" title="Whether a short sheet repeats the table to fill the page">
+        <option value="1">Table once</option>
+        <option value="fill">Repeat to fill page</option>
+      </select>
+    </div>
+  </div>
+  <div class="grp">
+    <span class="cap">Page</span>
+    <div class="row">
+      <select id="pSize"><option value="letter">Letter</option><option value="a4">A4</option><option value="legal">Legal</option><option value="custom" disabled>Custom</option></select>
+      <select id="pOrient"><option value="portrait">Portrait</option><option value="landscape">Landscape</option></select>
+      <label title="Top margin">Top <input id="pTop" type="number" step="0.05" min="0"></label>
+      <label title="Bottom margin: the footer sits here">Bottom <input id="pBottom" type="number" step="0.05" min="0"></label>
+      <select id="pUnits" title="Units for sizes"><option value="in">in</option><option value="mm">mm</option></select>
+    </div>
+  </div>
+  <div class="grp">
+    <span class="cap">Zoom</span>
+    <div class="row"><select id="gZoom" title="Zoom the grid (Ctrl+wheel)"></select></div>
+  </div>
+  <div class="grow"></div>
+  <div class="grp">
+    <span class="cap">&nbsp;</span>
+    <div class="row">
+      <button id="bSuggest" title="Suggest what each cell holds, from the labels beside it">Suggest</button>
+      <button id="bPaint" title="Paint what each cell holds: Part Number, Job Number, the table's columns">Designate</button>
+      <button id="saveBtn" class="primary" title="Save (Ctrl+S)">Save</button>
+    </div>
+  </div>
+</div>
+
+<div id="work">
+  <aside id="palette" hidden>
+    <h3>Paint with</h3>
+    <p class="hint">Pick a field, then click or drag over cells. Header fields go above the table line; table columns go in the row below the table's heading.</p>
+    <div id="brushes"></div>
+  </aside>
+  <section id="sheet">
+    <div id="suggBar" hidden><span id="suggText"></span><span class="grow"></span><button id="suggAll" class="primary">Accept all</button><button id="suggNone">Dismiss</button></div>
+    <div id="gridWrap"><div id="gridBox"><table id="grid"></table><div id="tline"><span>&#x2195; Table starts here</span></div><div id="hline"></div></div></div>
+    <div id="problems"></div>
+  </section>
+  <aside id="side">
+    <div class="bar">
+      <strong>Preview</strong>
+      <span class="grow"></span>
+      <label><input id="sample" type="checkbox"> Show sample values</label>
+    </div>
+    <div id="prevHost"></div>
+    <div id="checklist"></div>
+  </aside>
+</div>
+
+<div class="modal-back" id="dlgBack" hidden><div class="dialog" id="dlg"></div></div>
+<div id="toast" hidden></div>
+<script src="./node_modules/fflate/umd/index.js"></script>
+<script type="module" src="./forms.js"></script>
+</body>
+</html>
