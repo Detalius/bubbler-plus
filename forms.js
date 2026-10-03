@@ -466,7 +466,7 @@ function startResize(e, rz) {
     window.removeEventListener('mousemove', move);
     window.removeEventListener('mouseup', up);
     hideToast();
-    if (isCol) M.fitWidth(G, targets);
+    if (isCol) M.fitWidth(G);
     if (JSON.stringify(G) !== before) {
       undoStack.push(before);
       redoStack = [];
@@ -675,7 +675,7 @@ $('bDelRow').onclick = () => {
   edit(() => M.deleteRows(G, b.r0, b.r1 - b.r0 + 1));
   clampSel();
 };
-$('bInsCol').onclick = () => { hideInsMark(); const c = rawBox().c0; edit(() => { M.insertCols(G, c, 1); M.fitWidth(G, [c]); }); };
+$('bInsCol').onclick = () => { hideInsMark(); const c = rawBox().c0; edit(() => { M.insertCols(G, c, 1); M.fitWidth(G); }); };
 $('bDelCol').onclick = () => {
   const b = rawBox();
   if (b.c1 - b.c0 + 1 >= G.cols.length) { toast('A form needs at least one column.'); return; }
@@ -704,7 +704,7 @@ $('bW').onchange = () => {
   if (!(v >= 0.05)) return renderRibbonState();
   const b = rawBox();
   const cols = [...new Set(range(b.c0, b.c1).flatMap(c => M.checkTwinCols(G, c)))];
-  edit(() => { for (const c of cols) G.cols[c] = +v.toFixed(4); M.fitWidth(G, cols); });
+  edit(() => { for (const c of cols) G.cols[c] = +v.toFixed(4); M.fitWidth(G); });
 };
 $('bH').onchange = () => {
   const v = fromUnits(+$('bH').value);
@@ -955,7 +955,7 @@ function renderChecks() {
       const f = document.createElement('button');
       f.className = 'trim';
       f.textContent = 'Fit to page';
-      f.title = 'Narrow every column in proportion, so the form fits the page';
+      f.title = 'Shrink the whole form, text and all, to fit the page';
       f.onclick = () => edit(() => M.fitWidth(G));
       host.appendChild(f);
     }
@@ -1148,7 +1148,7 @@ async function okToDiscard() {
   if (!dirty) return true;
   const r = await dialog(`<h2>Discard your changes?</h2>
     <p>“${esc(G.name)}” has changes that aren’t saved.</p>
-    <div class="acts"><button data-v="">Keep editing</button><button class="primary" data-v="ok">Discard</button></div>`);
+    <div class="acts"><button data-v="ok">Discard</button><button class="primary" data-v="">Keep editing</button></div>`);
   return r === 'ok';
 }
 

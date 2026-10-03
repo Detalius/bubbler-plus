@@ -743,20 +743,23 @@ export function equalizeChecks(G) {
 // The widest a form may be on its page: a quarter inch kept clear each side.
 export const usableWidth = G => G.page.size[0] - 0.5;
 
-// Narrows columns in proportion until the form fits its page. Columns in
-// `keep` (the ones just set) keep their width while the rest give way; if they
-// alone are too wide, everything shrinks together. Check copies shrink by the
-// same factor, so they stay equal. False when it already fits.
-export function fitWidth(G, keep = []) {
+// Shrinks the whole form until it fits its page: every column, every row and
+// every text size by one factor, so it keeps exactly the shape it was given.
+// What the user sets is the design; the page only decides the scale. Never
+// grows a form, and false when it already fits.
+export function fitWidth(G) {
   const limit = usableWidth(G);
   const total = sum(G.cols);
   if (total <= limit + 1e-6) return false;
-  const held = new Set(keep.filter(c => c >= 0 && c < G.cols.length));
-  const heldW = sum([...held].map(c => G.cols[c]));
-  const rest = total - heldW;
-  const k = held.size && heldW < limit && rest > 0 ? (limit - heldW) / rest : limit / total;
-  const all = !(held.size && heldW < limit && rest > 0);
-  G.cols = G.cols.map((w, c) => (all || !held.has(c) ? Math.floor(w * k * 1e6) / 1e6 : w));
+  const k = limit / total;
+  const scale = v => Math.floor(v * k * 1e6) / 1e6;
+  const pt = v => Math.max(1, Math.round(v * k * 100) / 100);
+  G.cols = G.cols.map(scale);
+  G.rows = G.rows.map(scale);
+  G.font = { ...G.font, size: pt(G.font.size) };
+  for (const cell of Object.values(G.cells)) if (cell.size != null) cell.size = pt(cell.size);
+  if (G.section?.size != null) G.section = { ...G.section, size: pt(G.section.size) };
+  G.footer = (G.footer ?? []).map(f => (f.size != null ? { ...f, size: pt(f.size) } : f));
   return true;
 }
 

@@ -492,27 +492,32 @@ test('unequal checks are a problem with a fix that keeps their total width', () 
   assert.ok(widths.every(w => Math.abs(w - widths[0]) < 1e-6));
 });
 
-test('fitting to the page: the columns just set keep their width, the rest give way', () => {
+test('fitting to the page scales the whole form, keeping its shape', () => {
   const G = F.templateToGrid(clone(builtins.find(t => t.id === 'ipi-landscape')));
   const limit = F.usableWidth(G);
   G.cols[1] += 1.5;                                        // the Dimension column, dragged wider
-  const set = G.cols[1];
-  assert.ok(F.fitWidth(G, [1]));
+  const cols = G.cols.slice(), rows = G.rows.slice();
+  const size = G.font.size, title = Object.values(G.cells).find(c => c.text === 'In-Process Inspection (IPI)').size;
+  assert.ok(F.fitWidth(G));
+  const k = limit / cols.reduce((a, b) => a + b, 0);
   assert.ok(Math.abs(G.cols.reduce((a, b) => a + b, 0) - limit) < 1e-4);
-  assert.equal(G.cols[1], set);
-  const run = F.checkRun(G);
-  const copies = Array.from({ length: run.n }, (_, k) => G.cols[run.c0 + k * run.w]);
-  assert.ok(copies.every(w => Math.abs(w - copies[0]) < 1e-9));
+  G.cols.forEach((w, i) => assert.ok(Math.abs(w - cols[i] * k) < 1e-5, `col ${i}`));
+  G.rows.forEach((h, i) => assert.ok(Math.abs(h - rows[i] * k) < 1e-5, `row ${i}`));
+  assert.ok(Math.abs(G.font.size - size * k) < 0.01);
+  const t2 = Object.values(G.cells).find(c => c.text === 'In-Process Inspection (IPI)').size;
+  assert.ok(Math.abs(t2 - title * k) < 0.01);
+  // The dragged column is still exactly as much wider than its neighbour as it was set.
+  assert.ok(Math.abs(G.cols[1] / G.cols[2] - cols[1] / cols[2]) < 1e-4);
   assert.deepEqual(F.checkGrid(G).problems, []);
-  assert.equal(F.fitWidth(G, [1]), false);                 // already fits: nothing changes
+  assert.equal(F.fitWidth(G), false);                      // already fits: nothing changes
 });
 
-test('a column set wider than the page itself makes everything shrink together', () => {
+test('a form that fits is never grown', () => {
   const G = F.starterGrid('portrait');
-  G.cols[1] = 20;
-  F.fitWidth(G, [1]);
-  assert.ok(Math.abs(G.cols.reduce((a, b) => a + b, 0) - F.usableWidth(G)) < 1e-4);
-  assert.ok(G.cols[1] < 20);
+  G.cols = G.cols.map(w => w / 2);
+  const before = JSON.stringify(G);
+  assert.equal(F.fitWidth(G), false);
+  assert.equal(JSON.stringify(G), before);
 });
 
 test('a form wider than its page offers the fit as a fix', () => {
