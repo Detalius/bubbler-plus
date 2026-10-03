@@ -491,3 +491,44 @@ test('unequal checks are a problem with a fix that keeps their total width', () 
   const widths = Array.from({ length: 8 }, (_, k) => G.cols[run.c0 + k * run.w]);
   assert.ok(widths.every(w => Math.abs(w - widths[0]) < 1e-6));
 });
+
+test('fitting to the page: the columns just set keep their width, the rest give way', () => {
+  const G = F.templateToGrid(clone(builtins.find(t => t.id === 'ipi-landscape')));
+  const limit = F.usableWidth(G);
+  G.cols[1] += 1.5;                                        // the Dimension column, dragged wider
+  const set = G.cols[1];
+  assert.ok(F.fitWidth(G, [1]));
+  assert.ok(Math.abs(G.cols.reduce((a, b) => a + b, 0) - limit) < 1e-4);
+  assert.equal(G.cols[1], set);
+  const run = F.checkRun(G);
+  const copies = Array.from({ length: run.n }, (_, k) => G.cols[run.c0 + k * run.w]);
+  assert.ok(copies.every(w => Math.abs(w - copies[0]) < 1e-9));
+  assert.deepEqual(F.checkGrid(G).problems, []);
+  assert.equal(F.fitWidth(G, [1]), false);                 // already fits: nothing changes
+});
+
+test('a column set wider than the page itself makes everything shrink together', () => {
+  const G = F.starterGrid('portrait');
+  G.cols[1] = 20;
+  F.fitWidth(G, [1]);
+  assert.ok(Math.abs(G.cols.reduce((a, b) => a + b, 0) - F.usableWidth(G)) < 1e-4);
+  assert.ok(G.cols[1] < 20);
+});
+
+test('a form wider than its page offers the fit as a fix', () => {
+  const G = F.templateToGrid(clone(builtins.find(t => t.id === 'ipi-landscape')));
+  G.page.size = [8.5, 11];                                 // turned to portrait
+  const { template, problems } = F.checkGrid(G);
+  assert.equal(template, null);
+  assert.ok(problems.some(p => p.fix === 'fit'), JSON.stringify(problems));
+  F.fitWidth(G);
+  assert.deepEqual(F.checkGrid(G).problems, []);
+});
+
+test('header and table both too wide are one problem, with one fix', () => {
+  const G = F.templateToGrid(clone(builtins.find(t => t.id === 'ipi-landscape')));
+  G.page.size = [8.5, 11];
+  const fits = F.checkGrid(G).problems.filter(p => p.fix === 'fit');
+  assert.equal(fits.length, 1);
+  assert.match(fits[0].msg, /form is wider than the page/);
+});

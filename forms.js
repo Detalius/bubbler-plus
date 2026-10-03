@@ -466,6 +466,7 @@ function startResize(e, rz) {
     window.removeEventListener('mousemove', move);
     window.removeEventListener('mouseup', up);
     hideToast();
+    if (isCol) M.fitWidth(G, targets);
     if (JSON.stringify(G) !== before) {
       undoStack.push(before);
       redoStack = [];
@@ -674,7 +675,7 @@ $('bDelRow').onclick = () => {
   edit(() => M.deleteRows(G, b.r0, b.r1 - b.r0 + 1));
   clampSel();
 };
-$('bInsCol').onclick = () => { hideInsMark(); edit(() => M.insertCols(G, rawBox().c0, 1)); };
+$('bInsCol').onclick = () => { hideInsMark(); const c = rawBox().c0; edit(() => { M.insertCols(G, c, 1); M.fitWidth(G, [c]); }); };
 $('bDelCol').onclick = () => {
   const b = rawBox();
   if (b.c1 - b.c0 + 1 >= G.cols.length) { toast('A form needs at least one column.'); return; }
@@ -703,7 +704,7 @@ $('bW').onchange = () => {
   if (!(v >= 0.05)) return renderRibbonState();
   const b = rawBox();
   const cols = [...new Set(range(b.c0, b.c1).flatMap(c => M.checkTwinCols(G, c)))];
-  edit(() => { for (const c of cols) G.cols[c] = +v.toFixed(4); });
+  edit(() => { for (const c of cols) G.cols[c] = +v.toFixed(4); M.fitWidth(G, cols); });
 };
 $('bH').onchange = () => {
   const v = fromUnits(+$('bH').value);
@@ -950,6 +951,14 @@ function renderChecks() {
     if (p.note) b.style.color = 'var(--ink-dim)';
     if (p.at) b.onclick = () => selectCell(p.at[0], p.at[1]);
     host.appendChild(b);
+    if (p.fix === 'fit') {
+      const f = document.createElement('button');
+      f.className = 'trim';
+      f.textContent = 'Fit to page';
+      f.title = 'Narrow every column in proportion, so the form fits the page';
+      f.onclick = () => edit(() => M.fitWidth(G));
+      host.appendChild(f);
+    }
     if (p.fix === 'equalize') {
       const f = document.createElement('button');
       f.className = 'trim';
@@ -1006,7 +1015,7 @@ function drawPreview() {
   shadow.innerHTML = '';
   const style = document.createElement('style');
   style.textContent = printCss('') +
-    '.paper{box-shadow:0 2px 12px rgba(0,0,0,.5);margin:0 auto 14px;background:#fff}' +
+    '.paper{box-shadow:0 2px 12px rgba(0,0,0,.5);margin:0 auto 14px;background:#fff;color:#000}' +
     '.msg{color:#bbb;font:13px system-ui,sans-serif;padding:20px;text-align:center}';
   shadow.appendChild(style);
   const t = lastCheck.template;

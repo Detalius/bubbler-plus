@@ -471,7 +471,14 @@ export function checkGrid(G) {
   const { template, problems } = gridToTemplate(G);
   // A form with any problem is never handed out: it would save, and print wrong.
   if (!template || problems.length) return { template: null, problems };
-  const fmt = validateTemplate(template).map(msg => ({ msg: friendly(msg), at: null }));
+  const raw = validateTemplate(template);
+  const wide = raw.filter(msg => /wider than the page/.test(msg));
+  // Header and table too wide are one problem with one fix, not two.
+  const fmt = raw.filter(msg => !/wider than the page/.test(msg)).map(msg => ({ msg: friendly(msg), at: null }));
+  if (wide.length) {
+    fmt.unshift({ msg: wide.length > 1 ? 'The form is wider than the page. Narrow some columns, or turn the page.'
+      : friendly(wide[0]), at: null, fix: 'fit' });
+  }
   return { template: fmt.length ? null : template, problems: fmt };
 }
 
@@ -730,6 +737,26 @@ export function equalizeChecks(G) {
     const avg = sum(cols.map(c => G.cols[c])) / run.n;
     for (const c of cols) G.cols[c] = +avg.toFixed(6);
   }
+  return true;
+}
+
+// The widest a form may be on its page: a quarter inch kept clear each side.
+export const usableWidth = G => G.page.size[0] - 0.5;
+
+// Narrows columns in proportion until the form fits its page. Columns in
+// `keep` (the ones just set) keep their width while the rest give way; if they
+// alone are too wide, everything shrinks together. Check copies shrink by the
+// same factor, so they stay equal. False when it already fits.
+export function fitWidth(G, keep = []) {
+  const limit = usableWidth(G);
+  const total = sum(G.cols);
+  if (total <= limit + 1e-6) return false;
+  const held = new Set(keep.filter(c => c >= 0 && c < G.cols.length));
+  const heldW = sum([...held].map(c => G.cols[c]));
+  const rest = total - heldW;
+  const k = held.size && heldW < limit && rest > 0 ? (limit - heldW) / rest : limit / total;
+  const all = !(held.size && heldW < limit && rest > 0);
+  G.cols = G.cols.map((w, c) => (all || !held.has(c) ? Math.floor(w * k * 1e6) / 1e6 : w));
   return true;
 }
 
