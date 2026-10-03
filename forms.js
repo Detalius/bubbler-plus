@@ -239,6 +239,10 @@ function renderGrid() {
     cg.appendChild(col);
   }
   g.appendChild(cg);
+  // Stated, not left to the cells: a fixed-layout table with no width lets
+  // wide content push a column past the width it was given. Text clips instead,
+  // as the print does.
+  g.style.width = (46 + G.cols.reduce((a, w) => a + w * ppi(), 0)).toFixed(2) + 'px';
 
   const head = document.createElement('tr');
   const corner = document.createElement('th');

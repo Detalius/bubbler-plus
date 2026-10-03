@@ -35,7 +35,7 @@
 
   /* ---------------- Ribbon ---------------- */
   /* Groups are two rows high, with heavy rules between them, as in Excel. */
-  #ribbon { display: flex; align-items: stretch; gap: 10px; flex-wrap: wrap;
+  #ribbon { display: flex; align-items: stretch; gap: 12px; flex-wrap: wrap;
             padding: 8px 14px; background: var(--panel); border-bottom: 1px solid var(--edge); }
   .grp { display: flex; flex-direction: column; gap: 4px; }
   .grp > .row { display: flex; gap: 4px; align-items: center; min-height: 28px; }
@@ -43,9 +43,16 @@
   .grp label { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
   .grp label.rl { min-width: 128px; justify-content: space-between; }
   .sep { width: 2px; align-self: stretch; background: #4a4a4a; border-radius: 1px; margin: 2px; }
-  .grp:last-child { justify-content: flex-end; }
-  #fName { width: 200px; }
-  #saveBtn { width: 100%; }
+  /* A row whose controls share the group's full width. */
+  .grp > .row.fill > * { flex: 1; }
+  /* Three equal columns, as wide as the widest button: a neat 3 x 2 block. */
+  .grid3 { display: inline-grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+  .grid3 > * { width: 100%; min-height: 28px; }
+  .grid3 input[type=color] { height: 28px; }
+  #actbar { display: flex; gap: 6px; padding: 6px 14px; background: var(--panel);
+            border-bottom: 1px solid var(--edge); }
+  #actbar #saveBtn { min-width: 90px; }
+  #fName { width: 220px; }
   .grow { flex: 1; }
   .tb { min-width: 30px; padding: 3px 6px; }
   .tb b, .tb i { pointer-events: none; }
@@ -68,12 +75,16 @@
 
   #sheet { flex: 1; min-width: 0; display: flex; flex-direction: column; }
   #gridWrap { flex: 1; min-height: 0; overflow: auto; background: #1d1d1d; position: relative; }
-  #gridBox { position: relative; display: inline-block; margin: 0 170px 40px 0; }
+  #gridBox { position: relative; display: inline-block; margin: 0 40px 40px 0; }
   #grid { border-collapse: collapse; table-layout: fixed; background: #fff; color: #000;
           font-family: Arial, sans-serif; user-select: none; }
   #grid th { background: #e9e9e9; color: #444; font: 11px system-ui, sans-serif; border: 1px solid #c4c4c4;
              position: relative; padding: 0; text-align: center; overflow: hidden; }
-  #grid th.colhead { height: 20px; cursor: s-resize; }
+  /* Frozen, as in Excel: letters stay on top and row numbers on the left while
+     the form scrolls. */
+  #grid th.colhead { height: 20px; cursor: s-resize; position: sticky; top: 0; z-index: 2; }
+  #grid th.rowhead { position: sticky; left: 0; z-index: 2; }
+  #grid th.corner { position: sticky; left: 0; top: 0; z-index: 3; }
   #grid th.rowhead { cursor: e-resize; }
   #grid th.corner { cursor: default; }
   #grid th.sel-h { background: #cfe0f5; color: #1a4f8a; }
@@ -112,14 +123,13 @@
 
   /* The table line: Excel's page-break gesture. Above it is the header. */
   #tline { position: absolute; left: 0; right: 0; height: 0; border-top: 4px solid #1a6fd0;
-           cursor: ns-resize; z-index: 5; }
+           cursor: ns-resize; z-index: 5; line-height: 0; }
   #tline::before { content: ''; position: absolute; left: 0; right: 0; top: -8px; height: 14px; }
-  /* The handle sits past the grid's right edge, so it never covers a cell. */
-  #tline span { position: absolute; left: calc(100% + 6px); top: -12px; background: #1a6fd0; color: #fff;
-                font: 600 11px system-ui, sans-serif; padding: 2px 9px; border-radius: 4px;
-                white-space: nowrap; cursor: ns-resize; }
-  #tline span::before { content: ''; position: absolute; left: -6px; top: 7px;
-                        border: 5px solid transparent; border-left: 0; border-right-color: #1a6fd0; }
+  /* The handle sits in the row-number gutter: always in view however wide the
+     form scrolls, and never over a cell. */
+  #tline span { position: sticky; left: 1px; display: inline-block; transform: translateY(-10px); width: 44px; background: #1a6fd0; color: #fff;
+                font: 600 10px/16px system-ui, sans-serif; text-align: center; border-radius: 4px;
+                white-space: nowrap; cursor: ns-resize; box-shadow: 0 1px 3px rgba(0,0,0,.35); }
   #tline.dragging { border-top-style: dashed; }
   /* Where + Row / + Col will put the new one, while hovering them. */
   #insMark { position: absolute; z-index: 6; background: #e0a030; pointer-events: none;
@@ -209,7 +219,7 @@
       <button id="bItalic" class="tb" title="Italic (Ctrl+I)"><i>I</i></button>
       <select id="bSize" title="Font size (points)"></select>
     </div>
-    <div class="row">
+    <div class="row fill">
       <button id="bWrap" class="tb" title="Wrap text onto more lines">Wrap</button>
       <button id="bSymbol" class="tb" title="Use the GD&amp;T symbol font (for dimension columns)">GD&amp;T</button>
     </div>
@@ -217,12 +227,10 @@
   <div class="sep"></div>
   <div class="grp">
     <span class="cap">Align &amp; fill</span>
-    <div class="row">
+    <div class="grid3">
       <button id="bLeft" class="tb" title="Align left">&#x2BC7;</button>
       <button id="bCenter" class="tb" title="Centre">&#x2261;</button>
       <button id="bRight" class="tb" title="Align right">&#x2BC8;</button>
-    </div>
-    <div class="row">
       <input id="bFill" type="color" value="#d9d9d9" title="Fill colour">
       <button id="bFillApply" class="tb" title="Fill the selection">Fill</button>
       <button id="bNoFill" class="tb" title="No fill">None</button>
@@ -231,12 +239,10 @@
   <div class="sep"></div>
   <div class="grp">
     <span class="cap">Cells</span>
-    <div class="row">
+    <div class="grid3">
       <button id="bMerge" class="tb" title="Merge the selected cells into one">Merge</button>
       <button id="bInsRow" class="tb" title="Insert a row above the selected one">+ Row &#x2191;</button>
       <button id="bInsCol" class="tb" title="Insert a column left of the selected one">+ Col &#x2190;</button>
-    </div>
-    <div class="row">
       <button id="bUnmerge" class="tb" title="Split merged cells back apart">Unmerge</button>
       <button id="bDelRow" class="tb" title="Delete the selected rows">&minus; Row</button>
       <button id="bDelCol" class="tb" title="Delete the selected columns">&minus; Col</button>
@@ -265,7 +271,7 @@
   <div class="sep"></div>
   <div class="grp">
     <span class="cap">Page</span>
-    <div class="row">
+    <div class="row fill">
       <select id="pSize"><option value="letter">Letter</option><option value="a4">A4</option><option value="legal">Legal</option><option value="custom" disabled>Custom</option></select>
       <select id="pOrient"><option value="portrait">Portrait</option><option value="landscape">Landscape</option></select>
     </div>
@@ -275,17 +281,14 @@
       <select id="pUnits" title="Units for sizes"><option value="in">in</option><option value="mm">mm</option></select>
     </div>
   </div>
-  <div class="grow"></div>
-  <div class="grp">
-    <span class="cap">&nbsp;</span>
-    <div class="row">
-      <button id="bSuggest" title="Suggest what each cell holds, from the labels beside it">Suggest</button>
-      <button id="bPaint" title="Paint what each cell holds: Part Number, Job Number, the table's columns">Designate</button>
-    </div>
-    <div class="row"><button id="saveBtn" class="primary" title="Save (Ctrl+S)">Save</button></div>
-  </div>
+</div>
+<div id="actbar">
+  <button id="bSuggest" title="Suggest what each cell holds, from the labels beside it">Suggest</button>
+  <button id="bPaint" title="Paint what each cell holds: Part Number, Job Number, the table's columns">Designate</button>
+  <button id="saveBtn" class="primary" title="Save (Ctrl+S)">Save</button>
 </div>
 
+<div id="problems"></div>
 <div id="work">
   <aside id="palette" hidden>
     <h3>Paint with</h3>
@@ -293,9 +296,8 @@
     <div id="brushes"></div>
   </aside>
   <section id="sheet">
-    <div id="problems"></div>
     <div id="suggBar" hidden><span id="suggText"></span><span class="grow"></span><button id="suggAll" class="primary">Accept all</button><button id="suggNone">Dismiss</button></div>
-    <div id="gridWrap"><div id="gridBox"><table id="grid"></table><div id="tline"><span>&#x2195; Table starts here</span></div><div id="hline"></div><div id="insMark" hidden></div><div id="selBand" hidden></div></div></div>
+    <div id="gridWrap"><div id="gridBox"><table id="grid"></table><div id="tline" title="Table starts here: drag to move"><span>&#x2195; Table</span></div><div id="hline"></div><div id="insMark" hidden></div><div id="selBand" hidden></div></div></div>
   </section>
   <aside id="side">
     <div class="bar">
