@@ -28,7 +28,6 @@ code. Both are private and gitignored.
 | `index.html` | All markup and all CSS. |
 | `assets/templates/` | The eight built-in sheet templates. |
 | `tests/` | `node --test` suite. |
-| `tools/font/` | `build.py` makes `assets/SimpleGeoDim.ttf` from Liberation Sans 2.1.5 and the drawn symbols (`SimpleGeoDim-symbols.ttf`). Never build from pdfjs-dist's Liberation: it's 1.07, GPL. |
 | `tools/` | Dev checks: `check.sh` (runs `cssaudit.js` and `handlers.js`), `mockshare.bat` (a fake share for the crawl). `e2e/` is private (gitignored). |
 
 ## Commands
