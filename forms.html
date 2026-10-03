@@ -34,13 +34,18 @@
   input[type=color] { width: 30px; height: 26px; padding: 1px 2px; vertical-align: middle; }
 
   /* ---------------- Ribbon ---------------- */
-  #ribbon { display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap;
-            padding: 8px 12px; background: var(--panel); border-bottom: 1px solid var(--edge); }
-  .grp { display: flex; flex-direction: column; gap: 3px; }
-  .grp > .row { display: flex; gap: 4px; align-items: center; }
+  /* Groups are two rows high, with heavy rules between them, as in Excel. */
+  #ribbon { display: flex; align-items: stretch; gap: 10px; flex-wrap: wrap;
+            padding: 8px 14px; background: var(--panel); border-bottom: 1px solid var(--edge); }
+  .grp { display: flex; flex-direction: column; gap: 4px; }
+  .grp > .row { display: flex; gap: 4px; align-items: center; min-height: 28px; }
   .grp > .cap { font-size: 10.5px; color: var(--ink-dim); text-transform: uppercase; letter-spacing: .06em; }
-  .sep { width: 1px; align-self: stretch; background: var(--edge); }
-  #fName { width: 260px; }
+  .grp label { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+  .grp label.rl { min-width: 128px; justify-content: space-between; }
+  .sep { width: 2px; align-self: stretch; background: #4a4a4a; border-radius: 1px; margin: 2px; }
+  .grp:last-child { justify-content: flex-end; }
+  #fName { width: 200px; }
+  #saveBtn { width: 100%; }
   .grow { flex: 1; }
   .tb { min-width: 30px; padding: 3px 6px; }
   .tb b, .tb i { pointer-events: none; }
@@ -83,8 +88,11 @@
              position: relative; white-space: pre-wrap; word-break: break-word; cursor: cell;
              font-size: 8pt; line-height: 1.15; }
   #grid td.nowrap { white-space: pre; }
+  /* Check labels print on one line, spilling into their box; so here. */
+  #grid td.chklabel { white-space: pre; overflow: visible; }
+  #grid td.chklabel > div { overflow: visible !important; position: relative; z-index: 1; }
   #grid tr.extra td { opacity: .35; background-image: repeating-linear-gradient(135deg, transparent 0 6px, rgba(0,0,0,.06) 6px 7px); }
-  #grid tr.ghost td { opacity: .35; border-style: dashed; cursor: default; }
+  #grid tr.ghost td { opacity: .35; border-style: dashed; cursor: default; white-space: nowrap; text-overflow: ellipsis; }
   #grid td.sel { box-shadow: inset 0 0 0 999px rgba(45,125,210,.16); }
   #grid td.active { outline: 2px solid #1a6fd0; outline-offset: -2px; }
   #grid td.drop { outline: 2px dashed #1a6fd0; outline-offset: -3px; }
@@ -113,6 +121,15 @@
   #tline span::before { content: ''; position: absolute; left: -6px; top: 7px;
                         border: 5px solid transparent; border-left: 0; border-right-color: #1a6fd0; }
   #tline.dragging { border-top-style: dashed; }
+  /* Where + Row / + Col will put the new one, while hovering them. */
+  #insMark { position: absolute; z-index: 6; background: #e0a030; pointer-events: none;
+             box-shadow: 0 0 0 1px rgba(0,0,0,.25); }
+  #insMark[hidden] { display: none; }
+  /* A whole row or column selected: drawn over the grid, so a merged cell it
+     passes through isn't lit up whole. */
+  #selBand { position: absolute; z-index: 3; pointer-events: none; background: rgba(45,125,210,.16);
+             outline: 2px solid #1a6fd0; outline-offset: -1px; }
+  #selBand[hidden] { display: none; }
   #hline { position: absolute; left: 0; right: 0; height: 0; border-top: 2px dashed #2f9e6e;
            z-index: 4; pointer-events: none; }
   #cellEdit { position: absolute; z-index: 10; border: 2px solid #1a6fd0; outline: none; padding: 0 3px;
@@ -127,8 +144,9 @@
   .chip.sugg { background: #fff; color: #1a6fd0; border: 1px dashed #1a6fd0; cursor: pointer; }
   .chip.sugg:hover { background: #1a6fd0; color: #fff; }
   #problems .trim { margin-left: 8px; padding: 1px 8px; font-size: 12px; }
-  #problems { flex: none; max-height: 120px; overflow-y: auto; background: var(--panel);
-              border-top: 1px solid var(--edge); padding: 6px 12px; font-size: 12.5px; }
+  /* Right under Save, where the eye already is when Save is greyed out. */
+  #problems { flex: none; max-height: 96px; overflow-y: auto; background: #262626;
+              border-bottom: 1px solid var(--edge); padding: 5px 12px; font-size: 12.5px; }
   #problems .ok { color: var(--good); }
   #problems .p { display: block; color: var(--warn); cursor: pointer; padding: 1px 0;
                  background: none; border: none; text-align: left; }
@@ -179,8 +197,9 @@
 <body>
 <div id="ribbon">
   <div class="grp">
-    <span class="cap">Form name</span>
+    <span class="cap">Form</span>
     <div class="row"><input id="fName" type="text" spellcheck="false" placeholder="Form name"></div>
+    <div class="row"><label title="Zoom the grid (Ctrl+wheel)">Zoom <select id="gZoom"></select></label></div>
   </div>
   <div class="sep"></div>
   <div class="grp">
@@ -189,64 +208,72 @@
       <button id="bBold" class="tb" title="Bold (Ctrl+B)"><b>B</b></button>
       <button id="bItalic" class="tb" title="Italic (Ctrl+I)"><i>I</i></button>
       <select id="bSize" title="Font size (points)"></select>
+    </div>
+    <div class="row">
       <button id="bWrap" class="tb" title="Wrap text onto more lines">Wrap</button>
       <button id="bSymbol" class="tb" title="Use the GD&amp;T symbol font (for dimension columns)">GD&amp;T</button>
     </div>
   </div>
+  <div class="sep"></div>
   <div class="grp">
     <span class="cap">Align &amp; fill</span>
     <div class="row">
       <button id="bLeft" class="tb" title="Align left">&#x2BC7;</button>
       <button id="bCenter" class="tb" title="Centre">&#x2261;</button>
       <button id="bRight" class="tb" title="Align right">&#x2BC8;</button>
+    </div>
+    <div class="row">
       <input id="bFill" type="color" value="#d9d9d9" title="Fill colour">
       <button id="bFillApply" class="tb" title="Fill the selection">Fill</button>
       <button id="bNoFill" class="tb" title="No fill">None</button>
     </div>
   </div>
+  <div class="sep"></div>
   <div class="grp">
     <span class="cap">Cells</span>
     <div class="row">
       <button id="bMerge" class="tb" title="Merge the selected cells into one">Merge</button>
+      <button id="bInsRow" class="tb" title="Insert a row above the selected one">+ Row &#x2191;</button>
+      <button id="bInsCol" class="tb" title="Insert a column left of the selected one">+ Col &#x2190;</button>
+    </div>
+    <div class="row">
       <button id="bUnmerge" class="tb" title="Split merged cells back apart">Unmerge</button>
-      <button id="bInsRow" class="tb" title="Insert a row above the selection">+ Row</button>
       <button id="bDelRow" class="tb" title="Delete the selected rows">&minus; Row</button>
-      <button id="bInsCol" class="tb" title="Insert a column left of the selection">+ Col</button>
       <button id="bDelCol" class="tb" title="Delete the selected columns">&minus; Col</button>
     </div>
   </div>
+  <div class="sep"></div>
   <div class="grp">
     <span class="cap">Size (<span id="uCap">in</span>)</span>
-    <div class="row">
-      <label title="Width of the selected column">W <input id="bW" type="number" step="0.01" min="0.05"></label>
-      <label title="Height of the selected row">H <input id="bH" type="number" step="0.01" min="0.05"></label>
-    </div>
+    <div class="row"><label title="Width of the selected column">W <input id="bW" type="number" step="0.01" min="0.05"></label></div>
+    <div class="row"><label title="Height of the selected row">H <input id="bH" type="number" step="0.01" min="0.05"></label></div>
   </div>
   <div class="sep"></div>
   <div class="grp">
     <span class="cap">Table</span>
     <div class="row">
-      <label title="Rows in the table's heading, above the row that repeats">Heading rows <input id="tHead" type="number" min="1" max="9" step="1" style="width:46px"></label>
-      <label id="tChecksL" title="How many check columns sit side by side">Checks &times; <input id="tChecks" type="number" min="1" max="40" step="1" style="width:52px"></label>
+      <label class="rl" title="Rows in the table's heading, above the row that repeats">Heading rows <input id="tHead" type="number" min="1" max="9" step="1" style="width:52px"></label>
       <select id="tBands" title="Whether a short sheet repeats the table to fill the page">
         <option value="1">Table once</option>
         <option value="fill">Repeat to fill page</option>
       </select>
     </div>
+    <div class="row">
+      <label class="rl" id="tChecksL" title="How many check columns sit side by side">Checks &times; <input id="tChecks" type="number" min="1" max="40" step="1" style="width:52px"></label>
+    </div>
   </div>
+  <div class="sep"></div>
   <div class="grp">
     <span class="cap">Page</span>
     <div class="row">
       <select id="pSize"><option value="letter">Letter</option><option value="a4">A4</option><option value="legal">Legal</option><option value="custom" disabled>Custom</option></select>
       <select id="pOrient"><option value="portrait">Portrait</option><option value="landscape">Landscape</option></select>
+    </div>
+    <div class="row">
       <label title="Top margin">Top <input id="pTop" type="number" step="0.05" min="0"></label>
       <label title="Bottom margin: the footer sits here">Bottom <input id="pBottom" type="number" step="0.05" min="0"></label>
       <select id="pUnits" title="Units for sizes"><option value="in">in</option><option value="mm">mm</option></select>
     </div>
-  </div>
-  <div class="grp">
-    <span class="cap">Zoom</span>
-    <div class="row"><select id="gZoom" title="Zoom the grid (Ctrl+wheel)"></select></div>
   </div>
   <div class="grow"></div>
   <div class="grp">
@@ -254,8 +281,8 @@
     <div class="row">
       <button id="bSuggest" title="Suggest what each cell holds, from the labels beside it">Suggest</button>
       <button id="bPaint" title="Paint what each cell holds: Part Number, Job Number, the table's columns">Designate</button>
-      <button id="saveBtn" class="primary" title="Save (Ctrl+S)">Save</button>
     </div>
+    <div class="row"><button id="saveBtn" class="primary" title="Save (Ctrl+S)">Save</button></div>
   </div>
 </div>
 
@@ -266,14 +293,15 @@
     <div id="brushes"></div>
   </aside>
   <section id="sheet">
-    <div id="suggBar" hidden><span id="suggText"></span><span class="grow"></span><button id="suggAll" class="primary">Accept all</button><button id="suggNone">Dismiss</button></div>
-    <div id="gridWrap"><div id="gridBox"><table id="grid"></table><div id="tline"><span>&#x2195; Table starts here</span></div><div id="hline"></div></div></div>
     <div id="problems"></div>
+    <div id="suggBar" hidden><span id="suggText"></span><span class="grow"></span><button id="suggAll" class="primary">Accept all</button><button id="suggNone">Dismiss</button></div>
+    <div id="gridWrap"><div id="gridBox"><table id="grid"></table><div id="tline"><span>&#x2195; Table starts here</span></div><div id="hline"></div><div id="insMark" hidden></div><div id="selBand" hidden></div></div></div>
   </section>
   <aside id="side">
     <div class="bar">
       <strong>Preview</strong>
       <span class="grow"></span>
+      <select id="pvZoom" title="Zoom the preview"><option value="fit">Fit</option><option value="1">100%</option><option value="1.5">150%</option><option value="2">200%</option></select>
       <label><input id="sample" type="checkbox"> Show sample values</label>
     </div>
     <div id="prevHost"></div>

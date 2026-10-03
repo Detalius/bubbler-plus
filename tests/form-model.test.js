@@ -466,3 +466,28 @@ test('a sheet that ends at its heading gets the row that repeats', () => {
   assert.equal(G.rows.length, 6);
   assert.equal(F.suggest(G).filter(x => x.des === 'body.check').length, 3);
 });
+
+test('a part of one check column is the same part of every copy', () => {
+  const G = F.templateToGrid(clone(builtins.find(t => t.id === 'ipi-landscape')));
+  const run = F.checkRun(G);
+  const box = run.c0 + 3 * run.w + 1;                      // box half of the fourth check
+  assert.deepEqual(F.checkTwinCols(G, box), Array.from({ length: 8 }, (_, k) => run.c0 + k * run.w + 1));
+  assert.deepEqual(F.checkTwinCols(G, 0), [0]);           // outside the run: itself only
+});
+
+test('unequal checks are a problem with a fix that keeps their total width', () => {
+  const G = F.templateToGrid(clone(builtins.find(t => t.id === 'ipi-landscape')));
+  const run = F.checkRun(G);
+  G.cols[run.c0 + 2 * run.w] += 0.2;                       // one label part, wider
+  G.cols[run.c0 + 5 * run.w + 1] -= 0.1;                   // one box part, narrower
+  const total = G.cols.reduce((a, b) => a + b, 0);
+  let r = F.checkGrid(G);
+  assert.equal(r.template, null);
+  assert.equal(r.problems[0].fix, 'equalize');
+  assert.ok(F.equalizeChecks(G));
+  r = F.checkGrid(G);
+  assert.deepEqual(r.problems, []);
+  assert.ok(Math.abs(G.cols.reduce((a, b) => a + b, 0) - total) < 1e-4);
+  const widths = Array.from({ length: 8 }, (_, k) => G.cols[run.c0 + k * run.w]);
+  assert.ok(widths.every(w => Math.abs(w - widths[0]) < 1e-6));
+});

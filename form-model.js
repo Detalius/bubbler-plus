@@ -254,7 +254,7 @@ export function templateToGrid(t) {
 // format's rules.
 export function gridToTemplate(G) {
   const problems = [];
-  const bad = (msg, at = null) => problems.push({ msg, at });
+  const bad = (msg, at = null, fix = null) => problems.push(fix ? { msg, at, fix } : { msg, at });
   const C = G.cols.length;
   const dr = dataRow(G);
 
@@ -315,7 +315,10 @@ export function gridToTemplate(G) {
       const run = [];
       while (i < body.length && kindOf(body[i]) === 'check') run.push(body[i++]);
       const s0 = run[0];
-      if (run.some(r => Math.abs(r.width - s0.width) > EPS)) bad('Check columns have to be the same width.', [dr, run[0].c]);
+      if (run.some(r => Math.abs(r.width - s0.width) > EPS)) {
+        bad('Check columns have to be the same width.', [dr, run[0].c],
+          run.every(r => r.cs === s0.cs) ? 'equalize' : null);
+      }
       // The label part: the heading cell that starts at the column's left edge.
       // A heading that fills the whole column (as on most spreadsheets) prints
       // with its label over the left part and a box beside it.
@@ -703,6 +706,29 @@ export function setCheckRepeat(G, n) {
   const per = total / n;
   for (let k = 0; k < n; k++) {
     for (let j = 0; j < w; j++) G.cols[c0 + k * w + j] = +(first[j] * per / fw).toFixed(6);
+  }
+  return true;
+}
+
+// The same column in every copy of the check column, for `c` inside the check
+// run; just [c] otherwise. Resizing one part of a check resizes them all.
+export function checkTwinCols(G, c) {
+  const run = checkRun(G);
+  if (!run || c < run.c0 || c >= run.c0 + run.n * run.w || run.segs.some(s => s.cs !== run.w)) return [c];
+  const off = (c - run.c0) % run.w;
+  return Array.from({ length: run.n }, (_, k) => run.c0 + k * run.w + off);
+}
+
+// Makes every check copy the same widths: each part becomes the average of
+// that part across the copies, so the run keeps its total width. False when
+// the copies aren't built alike (different numbers of columns).
+export function equalizeChecks(G) {
+  const run = checkRun(G);
+  if (!run || run.segs.some(s => s.cs !== run.w)) return false;
+  for (let j = 0; j < run.w; j++) {
+    const cols = Array.from({ length: run.n }, (_, k) => run.c0 + k * run.w + j);
+    const avg = sum(cols.map(c => G.cols[c])) / run.n;
+    for (const c of cols) G.cols[c] = +avg.toFixed(6);
   }
   return true;
 }

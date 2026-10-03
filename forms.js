@@ -43,7 +43,7 @@ const toFont = t => [...String(t || '')].map(c => UNI_TO_FONT[c] || c).join('');
 let G = M.starterGrid('landscape');
 let undoStack = [], redoStack = [];
 let dirty = false;
-let sel = { ar: 0, ac: 0, fr: 0, fc: 0 };    // anchor and focus
+let sel = { ar: 0, ac: 0, fr: 0, fc: 0, kind: 'cells' };    // anchor, focus, and cells/rows/cols
 let painting = false, brush = null;
 let units = 'in';
 let shopForms = [];                           // [{ file, t, error }]
@@ -99,7 +99,7 @@ function load(grid) {
   G = grid;
   suggestions = [];
   undoStack = []; redoStack = [];
-  sel = { ar: 0, ac: 0, fr: 0, fc: 0 };
+  sel = { ar: 0, ac: 0, fr: 0, fc: 0, kind: 'cells' };
   setDirty(false);
   render();
 }
@@ -112,16 +112,24 @@ function clampSel() {
   for (const k of ['ar', 'fr']) sel[k] = Math.max(0, Math.min(sel[k], R));
   for (const k of ['ac', 'fc']) sel[k] = Math.max(0, Math.min(sel[k], C));
 }
-const selBox = () => M.growToMerges(G,
-  Math.min(sel.ar, sel.fr), Math.min(sel.ac, sel.fc),
-  Math.max(sel.ar, sel.fr), Math.max(sel.ac, sel.fc));
+// The selection as the user made it. A whole row or column (`kind` 'rows' or
+// 'cols') stays exactly that, passing through merged cells; a block of cells
+// grows to take in any merge it cuts, as in Excel.
+const rawBox = () => ({
+  r0: Math.min(sel.ar, sel.fr), c0: Math.min(sel.ac, sel.fc),
+  r1: Math.max(sel.ar, sel.fr), c1: Math.max(sel.ac, sel.fc)
+});
+const isBand = () => sel.kind === 'cols' || sel.kind === 'rows';
+const grownBox = () => { const b = rawBox(); return M.growToMerges(G, b.r0, b.c0, b.r1, b.c1); };
+const selBox = () => (isBand() ? rawBox() : grownBox());
 
-// Every origin cell in the selection.
+// Every cell the selection touches, once each, by its top-left corner.
 function selOrigins() {
-  const b = selBox(), out = [];
+  const b = selBox(), seen = new Set(), out = [];
   for (let r = b.r0; r <= b.r1; r++) for (let c = b.c0; c <= b.c1; c++) {
     const o = M.originOf(G, r, c);
-    if (o.r === r && o.c === c) out.push(o);
+    const k = `${o.r},${o.c}`;
+    if (!seen.has(k)) { seen.add(k); out.push(o); }
   }
   return out;
 }
@@ -131,7 +139,7 @@ const activeCell = () => {
 };
 
 function selectCell(r, c) {
-  sel = { ar: r, ac: c, fr: r, fc: c };
+  sel = { ar: r, ac: c, fr: r, fc: c, kind: 'cells' };
   clampSel();
   paintSel();
   scrollToCell(r, c);
@@ -143,16 +151,38 @@ function scrollToCell(r, c) {
 }
 const tdAt = (r, c) => $('grid').querySelector(`td[data-r="${r}"][data-c="${c}"]`);
 
+// Pixel edges of a block of grid rows and columns, inside #gridBox.
+function boxRect(b) {
+  const g = $('grid');
+  const th0 = g.querySelector(`th.colhead[data-c="${b.c0}"]`), th1 = g.querySelector(`th.colhead[data-c="${b.c1}"]`);
+  const tr0 = g.querySelector(`tr[data-r="${b.r0}"]`), tr1 = g.querySelector(`tr[data-r="${b.r1}"]`);
+  if (!th0 || !th1 || !tr0 || !tr1) return null;
+  return {
+    left: g.offsetLeft + th0.offsetLeft, right: g.offsetLeft + th1.offsetLeft + th1.offsetWidth,
+    top: g.offsetTop + tr0.offsetTop, bottom: g.offsetTop + tr1.offsetTop + tr1.offsetHeight
+  };
+}
+
 function paintSel() {
   const g = $('grid');
   g.querySelectorAll('.sel, .active, .sel-h').forEach(e => e.classList.remove('sel', 'active', 'sel-h'));
   const b = selBox();
-  for (const td of g.querySelectorAll('td[data-r]')) {
-    const r = +td.dataset.r, c = +td.dataset.c;
-    if (r >= b.r0 && r <= b.r1 && c >= b.c0 && c <= b.c1) td.classList.add('sel');
+  const band = $('selBand');
+  if (isBand()) {
+    // Drawn over the grid: lighting the cells would light a whole title merge.
+    const rc = boxRect(b);
+    band.hidden = !rc;
+    if (rc) Object.assign(band.style, { left: rc.left + 'px', top: rc.top + 'px',
+      width: (rc.right - rc.left) + 'px', height: (rc.bottom - rc.top) + 'px' });
+  } else {
+    band.hidden = true;
+    for (const td of g.querySelectorAll('td[data-r]')) {
+      const r = +td.dataset.r, c = +td.dataset.c;
+      if (r >= b.r0 && r <= b.r1 && c >= b.c0 && c <= b.c1) td.classList.add('sel');
+    }
+    const a = M.originOf(G, sel.ar, sel.ac);
+    tdAt(a.r, a.c)?.classList.add('active');
   }
-  const a = M.originOf(G, sel.ar, sel.ac);
-  tdAt(a.r, a.c)?.classList.add('active');
   g.querySelectorAll('th.colhead').forEach(th => {
     const c = +th.dataset.c;
     if (c >= b.c0 && c <= b.c1) th.classList.add('sel-h');
@@ -257,6 +287,9 @@ function renderGrid() {
       const height = M.originOf(G, r, c).rs > 1
         ? G.rows.slice(r, r + o.rs).reduce((a, b) => a + b, 0) * ppi() : h * ppi();
       styleTd(td, inner, cell, height - 2);
+      if (run && r >= G.table && r < dr && c >= run.c0 && c < run.c0 + run.n * run.w && (c - run.c0) % run.w === 0 && o.cs < run.w) {
+        td.classList.add('chklabel');
+      }
       const si = suggestions.findIndex(x => x.r === r && x.c === c);
       if (si >= 0 && !cell.des && !cell.text) {
         td.classList.add('sugg');
@@ -352,7 +385,7 @@ $('grid').addEventListener('mousedown', e => {
   const th = e.target.closest('th');
   if (th?.classList.contains('colhead')) {
     const c = +th.dataset.c;
-    if (e.shiftKey) { sel.fc = c; } else sel = { ar: 0, ac: c, fr: G.rows.length - 1, fc: c };
+    if (e.shiftKey && sel.kind === 'cols') { sel.fc = c; } else sel = { ar: 0, ac: c, fr: G.rows.length - 1, fc: c, kind: 'cols' };
     sel.ar = 0; sel.fr = G.rows.length - 1;
     dragSel = 'cols';
     paintSel();
@@ -361,7 +394,7 @@ $('grid').addEventListener('mousedown', e => {
   }
   if (th?.classList.contains('rowhead') && th.dataset.r != null) {
     const r = +th.dataset.r;
-    if (e.shiftKey) { sel.fr = r; } else sel = { ar: r, ac: 0, fr: r, fc: G.cols.length - 1 };
+    if (e.shiftKey && sel.kind === 'rows') { sel.fr = r; } else sel = { ar: r, ac: 0, fr: r, fc: G.cols.length - 1, kind: 'rows' };
     sel.ac = 0; sel.fc = G.cols.length - 1;
     dragSel = 'rows';
     paintSel();
@@ -371,7 +404,7 @@ $('grid').addEventListener('mousedown', e => {
   const td = e.target.closest('td[data-r]');
   if (!td) return;
   const r = +td.dataset.r, c = +td.dataset.c;
-  if (e.shiftKey) { sel.fr = r; sel.fc = c; } else sel = { ar: r, ac: c, fr: r, fc: c };
+  if (e.shiftKey) { sel.fr = r; sel.fc = c; sel.kind = 'cells'; } else sel = { ar: r, ac: c, fr: r, fc: c, kind: 'cells' };
   dragSel = 'cells';
   paintSel();
   e.preventDefault();
@@ -413,9 +446,11 @@ function startResize(e, rz) {
   const start = isCol ? e.clientX : e.clientY;
   const w0 = isCol ? G.cols[i] : G.rows[i];
   // A border dragged inside a selection resizes every selected column (or row).
-  const b = selBox();
+  const b = rawBox();
   const many = isCol ? (i >= b.c0 && i <= b.c1 && b.c1 > b.c0) : (i >= b.r0 && i <= b.r1 && b.r1 > b.r0);
-  const targets = many ? (isCol ? range(b.c0, b.c1) : range(b.r0, b.r1)) : [i];
+  const picked = many ? (isCol ? range(b.c0, b.c1) : range(b.r0, b.r1)) : [i];
+  // A part of one check column is the same part of all of them.
+  const targets = isCol ? [...new Set(picked.flatMap(c => M.checkTwinCols(G, c)))] : picked;
   const move = ev => {
     const d = ((isCol ? ev.clientX : ev.clientY) - start) / ppi();
     const v = Math.max(0.05, +(w0 + d).toFixed(4));
@@ -541,7 +576,7 @@ function move(dr, dc, extend = false) {
   if (dc < 0) c = o.c - 1;
   r = Math.max(0, Math.min(r, G.rows.length - 1));
   c = Math.max(0, Math.min(c, G.cols.length - 1));
-  if (extend) { sel.fr = r; sel.fc = c; paintSel(); scrollToCell(r, c); }
+  if (extend) { sel.fr = r; sel.fc = c; sel.kind = 'cells'; paintSel(); scrollToCell(r, c); }
   else selectCell(r, c);
 }
 
@@ -617,41 +652,59 @@ $('bSize').onchange = () => {
   formatSel({ size: Math.abs(v - G.font.size) < 1e-6 ? null : v });
 };
 $('bMerge').onclick = () => {
-  const b = selBox();
+  const b = grownBox();
   if (b.r0 === b.r1 && b.c0 === b.c1) return;
   if (b.r0 < G.table && b.r1 >= G.table) { toast('A merged cell can’t cross the table line.'); return; }
   edit(() => M.merge(G, b.r0, b.c0, b.r1, b.c1));
-  sel = { ar: b.r0, ac: b.c0, fr: b.r0, fc: b.c0 };
+  sel = { ar: b.r0, ac: b.c0, fr: b.r0, fc: b.c0, kind: 'cells' };
   paintSel();
 };
 $('bUnmerge').onclick = () => {
-  const b = selBox();
+  const b = grownBox();
   edit(() => M.unmerge(G, b.r0, b.c0, b.r1, b.c1));
 };
-$('bInsRow').onclick = () => edit(() => M.insertRows(G, selBox().r0, 1));
+$('bInsRow').onclick = () => { hideInsMark(); edit(() => M.insertRows(G, rawBox().r0, 1)); };
 $('bDelRow').onclick = () => {
-  const b = selBox();
+  const b = rawBox();
   if (b.r1 - b.r0 + 1 >= G.rows.length) { toast('A form needs at least some rows.'); return; }
   edit(() => M.deleteRows(G, b.r0, b.r1 - b.r0 + 1));
   clampSel();
 };
-$('bInsCol').onclick = () => edit(() => M.insertCols(G, selBox().c0, 1));
+$('bInsCol').onclick = () => { hideInsMark(); edit(() => M.insertCols(G, rawBox().c0, 1)); };
 $('bDelCol').onclick = () => {
-  const b = selBox();
+  const b = rawBox();
   if (b.c1 - b.c0 + 1 >= G.cols.length) { toast('A form needs at least one column.'); return; }
   edit(() => M.deleteCols(G, b.c0, b.c1 - b.c0 + 1));
   clampSel();
 };
+// While hovering + Row or + Col, a bar shows where the new one goes.
+function showInsMark(kind) {
+  const b = rawBox(), g = $('grid'), m = $('insMark');
+  const rc = boxRect({ r0: kind === 'row' ? b.r0 : 0, c0: kind === 'col' ? b.c0 : 0,
+    r1: kind === 'row' ? b.r0 : G.rows.length - 1, c1: kind === 'col' ? b.c0 : G.cols.length - 1 });
+  if (!rc) return;
+  Object.assign(m.style, kind === 'row'
+    ? { left: (g.offsetLeft) + 'px', top: (rc.top - 2) + 'px', width: g.offsetWidth + 'px', height: '4px' }
+    : { left: (rc.left - 2) + 'px', top: g.offsetTop + 'px', width: '4px', height: g.offsetHeight + 'px' });
+  m.hidden = false;
+}
+function hideInsMark() { $('insMark').hidden = true; }
+$('bInsRow').onmouseenter = () => showInsMark('row');
+$('bInsCol').onmouseenter = () => showInsMark('col');
+$('bInsRow').onmouseleave = hideInsMark;
+$('bInsCol').onmouseleave = hideInsMark;
+
 $('bW').onchange = () => {
   const v = fromUnits(+$('bW').value);
   if (!(v >= 0.05)) return renderRibbonState();
-  const b = selBox();
-  edit(() => { for (let c = b.c0; c <= b.c1; c++) G.cols[c] = +v.toFixed(4); });
+  const b = rawBox();
+  const cols = [...new Set(range(b.c0, b.c1).flatMap(c => M.checkTwinCols(G, c)))];
+  edit(() => { for (const c of cols) G.cols[c] = +v.toFixed(4); });
 };
 $('bH').onchange = () => {
   const v = fromUnits(+$('bH').value);
   if (!(v >= 0.05)) return renderRibbonState();
-  const b = selBox();
+  const b = rawBox();
   edit(() => { for (let r = b.r0; r <= b.r1; r++) G.rows[r] = +v.toFixed(4); });
 };
 $('tHead').onchange = () => edit(() => M.setHeadRows(G, Math.round(+$('tHead').value || 1)));
@@ -694,6 +747,14 @@ $('pUnits').onchange = () => {
 $('bPaint').onclick = () => setPainting(!painting);
 $('saveBtn').onclick = () => save(false);
 $('sample').onchange = () => renderPreview();
+$('pvZoom').onchange = () => {
+  try { localStorage.setItem('forms.pvZoom', $('pvZoom').value); } catch { /* per-viewer only */ }
+  renderPreview();
+};
+try {
+  const pz = localStorage.getItem('forms.pvZoom');
+  if (pz && [...$('pvZoom').options].some(o => o.value === pz)) $('pvZoom').value = pz;
+} catch { /* default: fit */ }
 const ZOOMS = [0.75, 1, 1.25, 1.5, 2];
 function setZoom(z) {
   zoom = Math.max(0.5, Math.min(3, z));
@@ -885,6 +946,14 @@ function renderChecks() {
     if (p.note) b.style.color = 'var(--ink-dim)';
     if (p.at) b.onclick = () => selectCell(p.at[0], p.at[1]);
     host.appendChild(b);
+    if (p.fix === 'equalize') {
+      const f = document.createElement('button');
+      f.className = 'trim';
+      f.textContent = 'Make them equal';
+      f.title = 'Give every check column the same widths, keeping their total';
+      f.onclick = () => edit(() => M.equalizeChecks(G));
+      host.appendChild(f);
+    }
     if (p.trim) {
       const t = document.createElement('button');
       t.className = 'trim';
@@ -894,7 +963,7 @@ function renderChecks() {
     }
   }
   $('saveBtn').disabled = !lastCheck.template;
-  $('saveBtn').title = lastCheck.template ? 'Save (Ctrl+S)' : 'Fix the problems under the grid first';
+  $('saveBtn').title = lastCheck.template ? 'Save (Ctrl+S)' : 'Fix the problems listed above the grid first';
 
   // Checklist
   const list = M.checklist(G);
@@ -940,7 +1009,7 @@ function drawPreview() {
   if (!t) {
     const m = document.createElement('div');
     m.className = 'msg';
-    m.textContent = 'The preview appears once the problems under the grid are fixed.';
+    m.textContent = 'The preview appears once the problems listed above the grid are fixed.';
     shadow.appendChild(m);
     return;
   }
@@ -957,7 +1026,8 @@ function drawPreview() {
   };
   const page = buildPage(ctx, rows, 1, 1, { logo, toFont });
   const avail = $('prevHost').clientWidth - 30;
-  const zoom = Math.min(1, avail / (t.page.size[0] * PX));
+  const pz = $('pvZoom').value;
+  const zoom = pz === 'fit' ? Math.min(1, avail / (t.page.size[0] * PX)) : +pz;
   const wrap = document.createElement('div');
   wrap.style.zoom = zoom;
   wrap.appendChild(page);
@@ -1121,7 +1191,7 @@ function newId(name) {
 async function save(asNew = false) {
   commitEdit();
   const { template } = M.checkGrid(G);
-  if (!template) { toast('Fix the problems listed under the grid first.'); return; }
+  if (!template) { toast('Fix the problems listed above the grid first.'); return; }
   if (!api.saveTemplate) { toast('Saving needs Bubbler+ Forms.'); return; }
   if (!G.name?.trim()) { toast('Give the form a name first.'); $('fName').focus(); return; }
   await loadShopForms();
