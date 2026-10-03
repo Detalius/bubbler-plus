@@ -90,6 +90,8 @@ test('the page: paper, orientation, one page wide, gridlines off', () => {
   assert.match(sheet, /<pageSetup paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="0"\/>/);
   assert.match(sheet, /<pageSetUpPr fitToPage="1"\/>/);
   assert.match(sheet, /showGridLines="0"/);
+  // Normal view: Excel's Page Layout view opens with a phantom left margin.
+  assert.doesNotMatch(sheet, /pageLayout/);
   assert.match(sheet, /top="0.3" bottom="0.5"/);
 });
 

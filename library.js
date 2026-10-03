@@ -441,21 +441,14 @@ $('libPrint').onclick = async () => {
 async function stampedDrawing(it) {
   const raw = openPkg.files[it.doc.file];
   const bytes = raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength);
-  const { PDFDocument, StandardFonts } = PDFLib;
+  const { PDFDocument } = PDFLib;
   const out = await PDFDocument.load(bytes.slice(0));
   const pages = out.getPages();
 
-  // pdf-lib fonts cannot cross documents, so the faces are embedded here and
-  // handed to the shared stamper. Helvetica only, until fontkit is loaded.
+  // pdf-lib fonts cannot cross documents, so the faces are embedded in this
+  // one, the same way the editor's export does.
   const S = sheets();
-  const base = await out.embedFont(StandardFonts.Helvetica);
-  const fonts = {
-    '':   base,
-    'b':  await out.embedFont(StandardFonts.HelveticaBold),
-    'i':  await out.embedFont(StandardFonts.HelveticaOblique),
-    'bi': await out.embedFont(StandardFonts.HelveticaBoldOblique),
-    encode: S.toWinAnsi
-  };
+  const fonts = await S.stampFonts(out);
   S.stampElements(pages, S.elementsFromManifest(openPkg.manifest, it.id), fonts);
 
   // Margins are baked into the BYTES, not asked for at print time, because

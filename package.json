@@ -16,6 +16,7 @@
     "electron-builder": "^26.15.3"
   },
   "dependencies": {
+    "@pdf-lib/fontkit": "^1.1.1",
     "electron-updater": "^6.8.9",
     "fflate": "^0.8.3",
     "konva": "^9.3.16",
@@ -68,7 +69,10 @@
       "include": "build/installer.nsh"
     },
     "extraResources": [
-      { "from": "build/forms.ico", "to": "forms.ico" }
+      {
+        "from": "build/forms.ico",
+        "to": "forms.ico"
+      }
     ],
     "artifactName": "Bubbler-Plus-Setup-${version}.${ext}",
     "publish": [

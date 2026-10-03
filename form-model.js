@@ -743,14 +743,16 @@ export function equalizeChecks(G) {
 // The widest a form may be on its page: a quarter inch kept clear each side.
 export const usableWidth = G => G.page.size[0] - 0.5;
 
-// Shrinks the whole form until it fits its page: every column, every row and
-// every text size by one factor, so it keeps exactly the shape it was given.
-// What the user sets is the design; the page only decides the scale. Never
-// grows a form, and false when it already fits.
-export function fitWidth(G) {
+// Scales the whole form to its page: every column, every row and every text
+// size by one factor, so it keeps exactly the shape it was given. What the user
+// sets is the design; the page only decides the scale. On its own it only
+// shrinks a form that's too wide; with `grow` (the Fit button) it also grows
+// one that's narrower, to fill the page. False when nothing changes.
+export function fitWidth(G, { grow = false } = {}) {
   const limit = usableWidth(G);
   const total = sum(G.cols);
-  if (total <= limit + 1e-6) return false;
+  // Columns are rounded to a millionth, so "fits" is to a ten-thousandth.
+  if (total <= 0 || Math.abs(total - limit) < 1e-4 || (!grow && total < limit)) return false;
   const k = limit / total;
   const scale = v => Math.floor(v * k * 1e6) / 1e6;
   const pt = v => Math.max(1, Math.round(v * k * 100) / 100);

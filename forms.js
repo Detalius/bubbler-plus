@@ -211,7 +211,7 @@ const DES_TD = { logo: 'des-logo', body: 'des-body', field: 'des-field', custom:
 function styleTd(td, inner, cell, height) {
   const size = cell.size ?? G.font.size;
   td.style.fontSize = (size * zoom).toFixed(2) + 'pt';
-  td.style.fontFamily = cell.font === 'symbol' ? "'VerisurfGDT', Arial, sans-serif"
+  td.style.fontFamily = cell.font === 'symbol' ? "'SimpleGeoDim', Arial, sans-serif"
     : `${cell.font || G.font.family}, Arial, sans-serif`;
   if (cell.fill) td.style.background = cell.fill;
   if (cell.bold) td.style.fontWeight = 'bold';
@@ -736,6 +736,7 @@ function setPage(size, orient) {
     G.page.size = orient === 'landscape' ? [h, w] : [w, h];
   });
 }
+$('pFit').onclick = () => edit(() => M.fitWidth(G, { grow: true }));
 $('pTop').onchange = () => {
   const v = fromUnits(+$('pTop').value);
   if (v >= 0) edit(() => { G.page.marginTop = +v.toFixed(4); });

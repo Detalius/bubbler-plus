@@ -164,7 +164,7 @@ npm run dist        # build an installer into dist/
 npm test            # run the tests (Node 22 or newer)
 ```
 
-The GD&T symbol font is not yet included in this repository. Without it, feature control frames fall back to a system font on screen and may not export correctly to PDF. Everything else works.
+GD&T symbols use **SimpleGeoDim** (`assets/SimpleGeoDim.ttf`), Liberation Sans with the symbols added at their Unicode codepoints, under the SIL Open Font License (`assets/SimpleGeoDim-OFL.txt`). Because the symbols sit at their real codepoints, text copied out of Bubbler+ pastes correctly anywhere with a font that has them.
 
 ## Reporting bugs
 

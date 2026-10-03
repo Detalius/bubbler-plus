@@ -10,7 +10,7 @@ const js = (scripts.length ? scripts : ['renderer.js', 'library.js', 'sheet-page
   .map(f => fs.readFileSync(f, 'utf8')).join('\n');
 
 const style = html.slice(html.indexOf('<style>'), html.indexOf('</style>'));
-// url(...) holds file names (Verisurf.ttf), not classes.
+// url(...) holds file names (SimpleGeoDim.ttf), not classes.
 const rules = style.replace(/url\([^)]*\)/g, '');
 const body = html.slice(html.indexOf('</style>'));
 const classes = new Set([...rules.matchAll(/\.([a-zA-Z][\w-]*)/g)].map(m => m[1]));

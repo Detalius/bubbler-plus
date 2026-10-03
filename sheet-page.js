@@ -11,7 +11,7 @@ import { checkColumn, headerWidth, bodyWidth, fillText } from './sheet-template.
 // Header and body are centred on the page and share one table, laid on the
 // union of their column edges, so their borders collapse into one grid.
 // ---------------------------------------------------------------------------
-export const SYMBOL_FONT_STACK = "'VerisurfGDT', Arial, sans-serif";
+export const SYMBOL_FONT_STACK = "'SimpleGeoDim', Arial, sans-serif";
 
 // Applies a template style to a page element.
 export function styleCell(el, st) {
@@ -243,7 +243,7 @@ export function buildPage(ctx, rows, pageNo, pageCount, { logo = null, toFont = 
 // and has no access to the app's stylesheet or asset folder.
 export function printCss(fontUri) {
   return `
-    ${fontUri ? `@font-face{font-family:'VerisurfGDT';src:url('${fontUri}') format('truetype');}` : ''}
+    ${fontUri ? `@font-face{font-family:'SimpleGeoDim';src:url('${fontUri}') format('truetype');}` : ''}
     *{box-sizing:border-box}
     html,body{margin:0;padding:0;background:#fff}
     body{font-family:Arial,Helvetica,sans-serif;color:#000}

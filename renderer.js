@@ -2816,9 +2816,10 @@ function paintSpec(preview, c) {
 // ---------------------------------------------------------------------------
 // GD&T
 //
-// The symbol font isn't Unicode-mapped: its symbols sit in punctuation slots
-// (position is '#', not U+2316). Everything is stored as Unicode and converted
-// to font slots only for display.
+// Everything is stored as Unicode and converted to the symbol font's slots only
+// for display. With SimpleGeoDim every slot IS the Unicode codepoint, so the
+// conversion is an identity; it stays so a face with other slots needs only a
+// change to symbols.json.
 // ---------------------------------------------------------------------------
 // Symbol rows from assets/symbols.json, as [key, fontSlot, unicode, label].
 const symRows = g => (SYMBOLS.groups[g] || []).map(s => [s.key, s.slot, s.unicode, s.label]);
@@ -4137,7 +4138,7 @@ async function loadLogo() {
 async function symbolFontDataUri() {
   if (fontDataUri) return fontDataUri;
   try {
-    const bytes = await window.api.readAsset('Verisurf.ttf');
+    const bytes = await window.api.readAsset(SYMBOLS.font.file);
     let bin = '';
     for (const b of bytes) bin += String.fromCharCode(b);
     fontDataUri = 'data:font/ttf;base64,' + btoa(bin);
@@ -5271,7 +5272,7 @@ window.BubblerSheets = {
   buildPage, paginate, paginateRows, rowsFromSheet, printCss,
   symbolFontDataUri, templateOf, readPackageTemplates, partFromManifest, renderSpec, toFont, specSource,
   sheetCtx, enablePan, holdCentre, wheelZoom, stampElements, elementsFromManifest, paintElements,
-  toWinAnsi
+  toWinAnsi, stampFonts
 };
 
 // The rail's two shapes: author (Bubbler, Dimensions, Sheets) or inspect
@@ -6028,12 +6029,38 @@ function toWinAnsi(t) {
 
 // Cached across exports; the bytes never change.
 let symbolFontBytes = null;
+// What a character the symbol font doesn't have prints as instead.
+const SYMBOL_STANDIN = { '\u00bd': '1/2', '\u00bc': '1/4', '\u00be': '3/4', '\u00d7': 'x', '\u00b5': 'u',
+  '\u2264': '<=', '\u2265': '>=', '\u00d8': '\u2300', '\u00f8': '\u2300', '\u23dc': '\u2312', '\t': ' ' };
+
+// The faces a drawing is stamped in: the symbol font for plain text, so it
+// carries GD&T, and Helvetica for bold and italic (the symbol font has no bold
+// or italic). Each face has its own encoder. Helvetica throughout if the symbol
+// font can't be loaded.
+async function stampFonts(pdfDoc) {
+  const sym = await loadSymbolFont(pdfDoc);
+  const fonts = {
+    '':   sym || await pdfDoc.embedFont(StandardFonts.Helvetica),
+    'b':  await pdfDoc.embedFont(StandardFonts.HelveticaBold),
+    'i':  await pdfDoc.embedFont(StandardFonts.HelveticaOblique),
+    'bi': await pdfDoc.embedFont(StandardFonts.HelveticaBoldOblique),
+    encode: toWinAnsi
+  };
+  fonts.encodeFor = f => (f === sym ? sym.encodeForBubbler : toWinAnsi);
+  return fonts;
+}
 async function loadSymbolFont(pdfDoc) {
   try {
     if (!window.api?.readAsset || typeof fontkit === 'undefined') return null;
-    if (!symbolFontBytes) symbolFontBytes = await window.api.readAsset('Verisurf.ttf');
+    if (!symbolFontBytes) symbolFontBytes = await window.api.readAsset(SYMBOLS.font.file);
     pdfDoc.registerFontkit(fontkit);
-    return await pdfDoc.embedFont(symbolFontBytes, { subset: true });
+    const font = await pdfDoc.embedFont(symbolFontBytes, { subset: true });
+    const have = new Set(font.getCharacterSet());
+    // A character the face lacks would print as an empty box: give it a
+    // readable stand-in instead, as Helvetica's encoder does.
+    font.encodeForBubbler = t => [...toFont(t)].map(c =>
+      (have.has(c.codePointAt(0)) ? c : SYMBOL_STANDIN[c] ?? '?')).join('');
+    return font;
   } catch (err) {
     console.warn('Symbol font unavailable, falling back to Helvetica:', err);
     return null;
@@ -6417,8 +6444,8 @@ function stampElements(pages, els, fonts) {
       const st = el.style;
       const f = fonts[(st.bold ? 'b' : '') + (st.italic ? 'i' : '')] || fonts[''];
       const size = st.fontSize;
-      // Stored Unicode, converted for whichever font is stamping.
-      const lines = linesOf(el).map(fonts.encode || toFont);
+      // Stored Unicode, converted for whichever font is stamping this text.
+      const lines = linesOf(el).map(fonts.encodeFor?.(f) ?? fonts.encode ?? toFont);
       const widths = lines.map(l => f.widthOfTextAtSize(l, size));
       const maxW = Math.max(0, ...widths);
 
@@ -6489,23 +6516,10 @@ async function exportPdf() {
   }
   const out = await PDFDocument.load(originalBytes.slice(0));
 
-  // Everything stamps in the symbol font, so annotation text can carry GD&T
-  // symbols. Falls back to Helvetica if the font can't be read.
-  let font, fonts;
-  const vs = await loadSymbolFont(out);
-  if (vs) {
-    font = vs;
-    fonts = { '': vs, b: vs, i: vs, bi: vs, encode: toFont };  // one face
-  } else {
-    font = await out.embedFont(StandardFonts.Helvetica);
-    fonts = {
-      '':   font,
-      'b':  await out.embedFont(StandardFonts.HelveticaBold),
-      'i':  await out.embedFont(StandardFonts.HelveticaOblique),
-      'bi': await out.embedFont(StandardFonts.HelveticaBoldOblique),
-      encode: toWinAnsi
-    };
-  }
+  // Plain text stamps in the symbol font, so annotations carry GD&T symbols;
+  // bold and italic in Helvetica. See stampFonts().
+  const fonts = await stampFonts(out);
+  const font = fonts[''];
   const pages = out.getPages();
 
   // Only the active drawing is stamped — each PDF exports as its own file.

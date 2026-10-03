@@ -55,7 +55,7 @@ export function pageModel(paper, { rowHeight = 0.2 } = {}) {
           italic: st.fontStyle === 'italic',
           align: st.textAlign || (cl.contains('logo') ? 'center' : 'left'),
           wrap: st.whiteSpace !== 'nowrap' && !cl.contains('chl'),
-          symbol: /VerisurfGDT/i.test(fam),
+          symbol: /SimpleGeoDim/i.test(fam),
           font: fam ? fam.split(',')[0].replace(/['"]/g, '').trim() : base.font
         }
       });
@@ -188,7 +188,7 @@ export function formWorkbook(pages, opts, zipSync) {
   const sheet = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
 <sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>
-<sheetViews><sheetView workbookViewId="0" showGridLines="0" view="pageLayout"/></sheetViews>
+<sheetViews><sheetView workbookViewId="0" showGridLines="0"/></sheetViews>
 <sheetFormatPr defaultRowHeight="15"/>
 <cols>${cols.map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${colWidth(w)}" customWidth="1"/>`).join('')}</cols>
 <sheetData>${sheetRows.join('')}</sheetData>

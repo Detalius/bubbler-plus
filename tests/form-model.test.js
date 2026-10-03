@@ -512,12 +512,20 @@ test('fitting to the page scales the whole form, keeping its shape', () => {
   assert.equal(F.fitWidth(G), false);                      // already fits: nothing changes
 });
 
-test('a form that fits is never grown', () => {
+test('a form that fits is never grown on its own; the Fit button grows it to the page', () => {
   const G = F.starterGrid('portrait');
   G.cols = G.cols.map(w => w / 2);
   const before = JSON.stringify(G);
   assert.equal(F.fitWidth(G), false);
   assert.equal(JSON.stringify(G), before);
+  const size = G.font.size, row = G.rows[0];
+  const k = F.usableWidth(G) / G.cols.reduce((a, b) => a + b, 0);
+  assert.ok(k > 1.5);
+  assert.ok(F.fitWidth(G, { grow: true }));
+  assert.ok(Math.abs(G.cols.reduce((a, b) => a + b, 0) - F.usableWidth(G)) < 1e-4);
+  assert.ok(Math.abs(G.font.size - size * k) < 0.01, G.font.size);
+  assert.ok(Math.abs(G.rows[0] - row * k) < 1e-4);
+  assert.equal(F.fitWidth(G, { grow: true }), false);      // already fits exactly
 });
 
 test('a form wider than its page offers the fit as a fix', () => {

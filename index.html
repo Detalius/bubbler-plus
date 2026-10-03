@@ -4,11 +4,11 @@
 <meta charset="utf-8">
 <title>Bubbler+</title>
 <style>
-  /* The symbol font. Its GD&T symbols sit in punctuation slots, so it must be
-     applied to any element showing them. */
+  /* The symbol font: SimpleGeoDim, Liberation Sans with the GD&T symbols at
+     their real codepoints (SIL OFL, see assets/SimpleGeoDim-OFL.txt). */
   @font-face {
-    font-family: 'VerisurfGDT';
-    src: url('./assets/Verisurf.ttf') format('truetype');
+    font-family: 'SimpleGeoDim';
+    src: url('./assets/SimpleGeoDim.ttf') format('truetype');
     font-display: block;
   }
   :root {
@@ -279,7 +279,7 @@
               padding: 14px 18px 10px; border-bottom: 1px solid var(--edge); }
   .dim-head h2 { margin: 0; font-size: 17px; font-weight: 500; }
   .dim-count { color: var(--ink-dim); font-size: 12px; }
-  .sym-menu { font-family: 'VerisurfGDT', system-ui, sans-serif;
+  .sym-menu { font-family: 'SimpleGeoDim', system-ui, sans-serif;
               font-size: 13px; padding: 7px 14px; border-radius: 6px;
               background: var(--accent); border-color: var(--accent-hi); color: #fff; }
   .sym-menu:hover { background: var(--accent-hi); }
@@ -330,7 +330,7 @@
   #dimTable input { background: var(--ctl); border: 1px solid var(--edge);
                     border-radius: 3px; color: var(--ink); padding: 3px 5px; font: inherit; }
   #dimTable input.symtext, input.symtext {
-    font-family: 'VerisurfGDT', Arial, sans-serif; font-size: 13px; }
+    font-family: 'SimpleGeoDim', Arial, sans-serif; font-size: 13px; }
   #dimTable input:focus { outline: 1px solid var(--accent); border-color: var(--accent); }
   #dimTable td.num-cell { vertical-align: top; text-align: right;
                           font-family: ui-monospace, monospace; color: #ffffff;
@@ -364,7 +364,7 @@
                           font-family: ui-monospace, monospace; }
   /* The rendered callout, padded to sit level with the input row. */
   #dimTable td.render { padding-top: 9px; overflow: hidden; }
-  .spec-render { font-family: 'VerisurfGDT', Arial, sans-serif; font-size: 14px;
+  .spec-render { font-family: 'SimpleGeoDim', Arial, sans-serif; font-size: 14px;
                  color: #fff; min-height: 19px; white-space: nowrap;
                  overflow: hidden; text-overflow: ellipsis; }
   .spec-render.empty { color: #5f5f5f; font-family: inherit; font-size: 12px; }
@@ -471,7 +471,7 @@
   .sh-row .num { font-family: ui-monospace, monospace; font-weight: 600; color: #fff;
                  min-width: 26px; text-align: right; }
   .sh-row .spec { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
-                  white-space: nowrap; font-family: 'VerisurfGDT', Arial, sans-serif; }
+                  white-space: nowrap; font-family: 'SimpleGeoDim', Arial, sans-serif; }
   .sh-row .acts { display: flex; gap: 4px; opacity: 0; }
   .sh-row:hover .acts { opacity: 1; }
   .sh-row .acts button { padding: 2px 7px; font-size: 11px; }
@@ -584,7 +584,7 @@
   .ins-row.head .spec { flex: 1; }
   /* The dimension is an input now, so it has to beat the generic width above. */
   .ins-row input.spec { flex: 1; width: auto; min-width: 0;
-                        font-family: 'VerisurfGDT', Arial, sans-serif; font-size: 13px;
+                        font-family: 'SimpleGeoDim', Arial, sans-serif; font-size: 13px;
                         background: transparent; border-color: transparent; }
   .ins-row input.spec:hover { border-color: var(--edge); }
   .ins-row input.spec:focus { background: var(--ctl); border-color: var(--accent); }
@@ -603,7 +603,7 @@
   .gdt-build { display: inline-flex; align-items: center; gap: 4px; flex-wrap: nowrap; }
   .gdt-build .seg-btn { border: 1px solid var(--edge); border-radius: 4px; flex: none;
                         background: var(--ctl); color: var(--ink);
-                        font-family: 'VerisurfGDT', serif; font-size: 17px;
+                        font-family: 'SimpleGeoDim', serif; font-size: 17px;
                         line-height: 1; width: 30px; height: 26px; padding: 0;
                         display: flex; align-items: center; justify-content: center; }
   .gdt-build .seg-btn:hover { background: var(--ctl-hi); }
@@ -615,7 +615,7 @@
   .gdt-build input.gval  { width: 76px; }
   .gdt-build input.gdatum { width: 76px; }
   .gdt-build input.gval, .gdt-build input.gdatum {
-    font-family: 'VerisurfGDT', ui-monospace, monospace; font-size: 13px; }
+    font-family: 'SimpleGeoDim', ui-monospace, monospace; font-size: 13px; }
   .gdt-build .add-btn { width: 22px; height: 22px; border-radius: 50%;
                         border: 1px solid var(--accent-hi); background: var(--accent);
                         color: #fff; font-size: 13px; line-height: 1; padding: 0;
@@ -634,7 +634,7 @@
   .gpop .grid.mod { grid-template-columns: repeat(4, 46px); }
   .gpop .cell { height: 42px; border: 1px solid var(--edge); border-radius: 5px;
                 background: var(--ctl); color: var(--ink); cursor: pointer;
-                font-family: 'VerisurfGDT', serif; font-size: 21px; line-height: 1;
+                font-family: 'SimpleGeoDim', serif; font-size: 21px; line-height: 1;
                 display: flex; align-items: center; justify-content: center; }
   .gpop .cell:hover { background: var(--accent); border-color: var(--accent-hi); color: #fff; }
   .gpop .cell.on { background: var(--accent); border-color: var(--accent-hi); color: #fff; }
@@ -1193,6 +1193,8 @@
 <script src="./node_modules/fflate/umd/index.js"></script>
 <script src="./node_modules/konva/konva.min.js"></script>
 <script src="./node_modules/pdf-lib/dist/pdf-lib.min.js"></script>
+<!-- Lets pdf-lib embed the symbol font in exported drawings. -->
+<script src="./node_modules/@pdf-lib/fontkit/dist/fontkit.umd.min.js"></script>
 <script type="module" src="./renderer.js"></script>
 <script type="module" src="./library.js"></script>
 <!-- Update notice, floating over the bottom-right corner. -->

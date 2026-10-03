@@ -7,8 +7,8 @@
   /* The symbol font, for the preview's callout column. Declared here, not in
      the preview's shadow root: Chromium ignores @font-face inside one. */
   @font-face {
-    font-family: 'VerisurfGDT';
-    src: url('./assets/Verisurf.ttf') format('truetype');
+    font-family: 'SimpleGeoDim';
+    src: url('./assets/SimpleGeoDim.ttf') format('truetype');
     font-display: block;
   }
   :root {
@@ -274,6 +274,7 @@
     <div class="row fill">
       <select id="pSize"><option value="letter">Letter</option><option value="a4">A4</option><option value="legal">Legal</option><option value="custom" disabled>Custom</option></select>
       <select id="pOrient"><option value="portrait">Portrait</option><option value="landscape">Landscape</option></select>
+      <button id="pFit" class="tb" title="Scale the whole form, text and all, to fill the page's width">&#x2194; Fit</button>
     </div>
     <div class="row">
       <label title="Top margin">Top <input id="pTop" type="number" step="0.05" min="0"></label>

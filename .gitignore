@@ -7,8 +7,8 @@ dist/
 # Local settings: holds real share paths, and belongs in %APPDATA%\Bubbler+ now
 config.json
 
-# Third-party font. NOT ours to redistribute — must never enter the history.
-# Remove this line only when the custom GD&T font replaces it.
+# The old third-party symbol font, replaced by SimpleGeoDim (OFL, committed).
+# Still ignored, so a stray local copy can never enter the history.
 assets/Verisurf.ttf
 assets/logo.png
 
