@@ -7,6 +7,7 @@ import {
   readCustom, customNames, isBuiltinField
 } from './sheet-template.js';
 import { buildPage as drawPage, printCss } from './sheet-page.js';
+import { pageModel, formWorkbook } from './xlsx-form.js';
 import IPI_L from './assets/templates/ipi-landscape.json' with { type: 'json' };
 import IPI_P from './assets/templates/ipi-portrait.json' with { type: 'json' };
 import MPFA_L from './assets/templates/mpfa-landscape.json' with { type: 'json' };
@@ -6162,10 +6163,15 @@ async function pickMany({ items, label, title, note, empty }) {
   return chosen;
 }
 
-// Writes every job's PDF into one picked folder. Nothing already there is
+// Writes every job's file (PDF or workbook) into one picked folder. Nothing already there is
 // overwritten: a taken name gets " (2)", " (3)"….
-async function saveBatch(jobs, kindPlural) {
-  if (!window.api?.printPdf) {
+const BATCH_KINDS = {
+  pdf: { mime: 'application/pdf', filter: { name: 'PDF', extensions: ['pdf'] } },
+  xlsx: { mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          filter: { name: 'Excel workbook', extensions: ['xlsx'] } }
+};
+async function saveBatch(jobs, kindPlural, ext = 'pdf') {
+  if (ext === 'pdf' && !window.api?.printPdf) {
     await notify('Printing unavailable', 'This build cannot reach the print service.');
     return;
   }
@@ -6176,9 +6182,9 @@ async function saveBatch(jobs, kindPlural) {
   for (const job of jobs) {
     try {
       const bytes = await job.bytes();
-      const name = `${job.stem}.pdf`;
-      const saved = await saveBytes(bytes, name, 'application/pdf',
-        [{ name: 'PDF', extensions: ['pdf'] }], { filePath: `${dir}/${name}`, noClobber: true });
+      const name = `${job.stem}.${ext}`;
+      const saved = await saveBytes(bytes, name, BATCH_KINDS[ext].mime,
+        [BATCH_KINDS[ext].filter], { filePath: `${dir}/${name}`, noClobber: true });
       written.push(saved.name);
     } catch (err) {
       failed.push(`${job.stem}: ${err.message}`);
@@ -6228,6 +6234,70 @@ async function exportRecordsPdf() {
     'records');
 }
 
+// ---- Forms as Excel ----
+// A carbon copy of the printed form, built from the same pages the PDF is: see
+// xlsx-form.js. GD&T stays Unicode (no toFont), since the customer opening it
+// won't have the bundled symbol font.
+function logoBytes() {
+  if (!logoDataUri) return null;
+  const bin = atob(logoDataUri.slice(logoDataUri.indexOf(',') + 1));
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+function formXlsxBytes(ctx, pageRows, name) {
+  const t = ctx.template;
+  const pages = pageRows.map((rows, i) =>
+    pageModel(drawPage(ctx, rows, i + 1, pageRows.length, { logo: null, toFont: x => x }),
+      { rowHeight: t.body.rowHeight }));
+  // Footer text filled in now; only the page number and count are left for Excel.
+  const bind = { ...ctx.bind, page: { number: '{page.number}', count: '{page.count}' } };
+  const footer = (t.footer || []).map(f => ({ ...f, text: fillText(f.text, bind) }));
+  return formWorkbook(pages, { sheetName: name, page: t.page, footer, logo: logoBytes() }, fflate.zipSync);
+}
+async function sheetXlsxBytes(sh) {
+  const pages = paginate(sh);
+  const ctx = sheetCtx(sh, pages.reduce((n, p) => n + p.length, 0));
+  return formXlsxBytes(ctx, pages.map(items => rowsFromSheet(sh, items)), sh.name);
+}
+async function inspXlsxBytes(ins) {
+  return formXlsxBytes(inspCtx(ins), paginateRows(ins.rows, templateOf(ins)), ins.sheetName || 'Record');
+}
+
+async function exportSheetsXlsx() {
+  const chosen = await pickMany({
+    items: sheets,
+    label: sh => {
+      const n = sh.items.filter(it => it.type !== 'header' && it.include).length;
+      return `${sh.name}  \u2014  ${sh.stage}, ${n} characteristic${n === 1 ? '' : 's'}`;
+    },
+    title: 'Export inspection sheets to Excel',
+    note: 'One workbook per sheet, laid out exactly like the printed form, written '
+        + 'into a folder you choose.',
+    empty: 'This package has no inspection sheets yet.'
+  });
+  if (!chosen) return;
+  await saveBatch(
+    chosen.map(sh => ({ stem: sheetStem(sh), bytes: () => sheetXlsxBytes(sh) })),
+    'sheets', 'xlsx');
+}
+
+async function exportRecordsXlsx() {
+  const chosen = await pickMany({
+    items: inspections,
+    label: ins => `${ins.sheetName || 'Record'}  \u2014  ${ins.inspector || 'no inspector'}`
+                + `, ${(ins.createdUtc || '').slice(0, 10) || 'undated'}`,
+    title: 'Export filled-in records to Excel',
+    note: 'One workbook per record, laid out exactly like the printed form with '
+        + 'everything filled in, written into a folder you choose.',
+    empty: 'This package has no filled-in records yet.'
+  });
+  if (!chosen) return;
+  await saveBatch(
+    chosen.map(ins => ({ stem: inspStem(ins), bytes: () => inspXlsxBytes(ins) })),
+    'records', 'xlsx');
+}
+
 async function exportExcel() {
   const chosen = await pickMany({
     items: sheets,
@@ -6272,7 +6342,9 @@ async function exportExcel() {
 async function exportDialog() {
   const options = [{ value: 'drawing', label: 'Bubbled drawing (PDF)' }];
   if (sheets.length) options.push({ value: 'sheets', label: 'Inspection sheets (PDF)' });
+  if (sheets.length) options.push({ value: 'sheetsXlsx', label: 'Inspection sheets (Excel)' });
   if (inspections.length) options.push({ value: 'records', label: 'Filled-in records (PDF)' });
+  if (inspections.length) options.push({ value: 'recordsXlsx', label: 'Filled-in records (Excel)' });
   options.push({ value: 'excel', label: 'Excel data (workbook)' });
 
   const { button, values } = await dialog({
@@ -6288,6 +6360,8 @@ async function exportDialog() {
     case 'drawing': return exportPdf();
     case 'sheets':  return exportSheetsPdf();
     case 'records': return exportRecordsPdf();
+    case 'sheetsXlsx':  return exportSheetsXlsx();
+    case 'recordsXlsx': return exportRecordsXlsx();
     case 'excel':   return exportExcel();
   }
 }

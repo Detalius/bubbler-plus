@@ -23,6 +23,7 @@ code. Both are private and gitignored.
 | `forms.html`, `forms.js` | The form editor, **Bubbler+ Forms**: `Bubbler+.exe --forms` opens this page instead of index.html, so nothing package-shaped (autosave, recovery, locks, updates) runs in it. Its own menu, AppUserModelId and icon (`build/installer.nsh` makes its shortcut). |
 | `form-model.js` | Pure: the editor's one-grid model and its two-way map to the template format, the edits, Excel import's layout and the suggestions. |
 | `xlsx-read.js` | Pure: reads one worksheet's look (text, merges, sizes, fills, fonts) for the editor's import. The unzip is passed in. |
+| `xlsx-form.js` | Forms as Excel: reads a page `buildPage()` drew into a plain model, and writes the models as a workbook laid out exactly like the print. Not the data export. |
 | `xlsx-append.js` | Appends sheets to a workbook by zip surgery, never by rebuilding it. |
 | `index.html` | All markup and all CSS. |
 | `assets/templates/` | The eight built-in sheet templates. |

@@ -11,7 +11,7 @@ head() { printf '\n== %s ==\n' "$1"; }
 head "Parse (renderer/print as MODULES — the browser loads them that way)"
 # node --check parses as a SCRIPT, where redeclaring a function is legal.
 # In a module it is a hard SyntaxError. This distinction has bitten twice.
-for f in renderer.js library.js sheet-page.js forms.js form-model.js xlsx-read.js; do
+for f in renderer.js library.js sheet-page.js forms.js form-model.js xlsx-read.js xlsx-form.js; do
   cp "$f" "/tmp/_chk_${f%.js}.mjs"
   if node --check "/tmp/_chk_${f%.js}.mjs" 2>/dev/null; then note "ok   $f"; else
     note "FAIL $f"; node --check "/tmp/_chk_${f%.js}.mjs" 2>&1 | head -4; fail=1; fi
@@ -23,7 +23,7 @@ done
 head "Duplicate top-level declarations"
 node -e '
 const fs=require("fs");
-for (const f of ["renderer.js","library.js","main.js","preload.js","forms.js","form-model.js","xlsx-read.js","sheet-page.js"]) {
+for (const f of ["renderer.js","library.js","main.js","preload.js","forms.js","form-model.js","xlsx-read.js","sheet-page.js","xlsx-form.js"]) {
   const s=fs.readFileSync(f,"utf8"), c={};
   for (const m of s.matchAll(/^(?:async\s+)?function\s+([A-Za-z0-9_$]+)/gm)) c[m[1]]=(c[m[1]]||0)+1;
   for (const m of s.matchAll(/^(?:const|let|var)\s+([A-Za-z0-9_$]+)\s*[=;]/gm)) c[m[1]]=(c[m[1]]||0)+1;

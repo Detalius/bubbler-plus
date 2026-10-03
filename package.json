@@ -39,6 +39,7 @@
       "sheet-page.js",
       "form-model.js",
       "xlsx-read.js",
+      "xlsx-form.js",
       "forms.html",
       "forms.js",
       "index.html",

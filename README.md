@@ -18,7 +18,7 @@ Built for small-shop QC: first article reports, in-process checks, final reports
 - **Author inspection sheets.** Pick the form it prints on: the built-in In-Process, First Article, Multi-Part First Article or Final, in portrait or landscape, or one of your shop's own (see [Your own forms](#your-own-forms)). Pick which dimensions go on which sheet, and override dimensions or recommended inspection method for any individual dimension.
 - **Record an inspection.** Fill out any sheet you've created with actual numbers. Records snapshot the package as it *was*, so any changes (remove bubbles, add bubbles, fix a mistake) won't appear — if a dimension was wrong, you'll see it in any past records.
 - **Find it again.** Packages publish themselves to an index as they are saved, so you can Quick Find a package by part number, part name, customer or file name.
-- **Export.** Bubbled drawings, inspection sheets and records as PDF, or the dimension list to Excel.
+- **Export.** Bubbled drawings as PDF; inspection sheets and records as PDF or as Excel workbooks laid out exactly like the printed form (for customers who want Excel); or the dimension list as plain data to Excel.
 
 ## Requirements
 
