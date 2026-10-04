@@ -46,7 +46,7 @@ if (!process.env.UV_THREADPOOL_SIZE) {
   process.env.UV_THREADPOOL_SIZE = String(Math.max(8, bootConcurrency() + 8));
 }
 
-const { app, BrowserWindow, Menu, ipcMain, dialog, shell } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, dialog, shell, nativeImage } = require('electron');
 app.setPath('userData', DATA_DIR);
 
 // The form editor is a second front door into this same executable:
@@ -367,12 +367,62 @@ ipcMain.handle('xlsx:append', async (_event, { file, sheets }) => {
 // ---------------------------------------------------------------------------
 // Assets and printing
 // ---------------------------------------------------------------------------
-// Asset bytes (fonts, the logo) for the renderer. fetch() on a file:// origin
+// Asset bytes (the symbol font) for the renderer. fetch() on a file:// origin
 // is unreliable.
 ipcMain.handle('asset:read', async (_event, name) => {
   if (!/^[\w.-]+$/.test(name)) throw new Error('Bad asset name');
   const buf = await fs.readFile(path.join(__dirname, 'assets', name));
   return new Uint8Array(buf);
+});
+
+// The shop logo: one PNG in the data folder, so it survives updates and each
+// shop sets its own. Sheets, forms, PDFs and Excel copies all read it from here.
+// Whatever was picked is stored as PNG, because the Excel export embeds PNG only.
+const LOGO_MAX_WIDTH = 1200;          // plenty for a header cell; keeps exports small
+const logoPath = () => path.join(appDir(), 'logo.png');
+
+// Returns PNG bytes for an image file, or null if it isn't one Electron can read.
+function logoFromFile(file) {
+  let img = nativeImage.createFromPath(file);
+  if (img.isEmpty()) return null;
+  if (img.getSize().width > LOGO_MAX_WIDTH) img = img.resize({ width: LOGO_MAX_WIDTH, quality: 'best' });
+  return img.toPNG();
+}
+
+ipcMain.handle('logo:read', async () => {
+  try {
+    return new Uint8Array(await fs.readFile(logoPath()));
+  } catch {
+    return null;                      // no logo set: forms print the LOGO placeholder
+  }
+});
+
+ipcMain.handle('logo:choose', async event => {
+  const r = await dialog.showOpenDialog(BrowserWindow.fromWebContents(event.sender), {
+    title: 'Shop logo',
+    filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg'] }],
+    properties: ['openFile']
+  });
+  if (r.canceled || !r.filePaths[0]) return { ok: false, canceled: true };
+  try {
+    const png = logoFromFile(r.filePaths[0]);
+    if (!png) return { ok: false, error: 'That file could not be read as a PNG or JPG image.' };
+    const tmp = `${logoPath()}.bubbler-tmp`;
+    await fs.writeFile(tmp, png);
+    await fs.rename(tmp, logoPath());
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: String(err && err.message || err) };
+  }
+});
+
+ipcMain.handle('logo:clear', async () => {
+  try {
+    await fs.unlink(logoPath());
+  } catch (err) {
+    if (err.code !== 'ENOENT') return { ok: false, error: String(err.message || err) };
+  }
+  return { ok: true };
 });
 
 // Renders a standalone HTML document to PDF in an offscreen window. Runs for

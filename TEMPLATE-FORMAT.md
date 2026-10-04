@@ -147,7 +147,7 @@ A grid of cells, like a merged range of spreadsheet cells.
 | `span` | `[rows, columns]` it covers. Default `[1, 1]`. |
 | `text` | Literal text; `{binding}` placeholders are filled in. |
 | `bind` | Shorthand for `"text": "{binding}"`. |
-| `logo` | `true` draws the shop logo, scaled to fit. |
+| `logo` | `true` draws the shop logo (**Settings > Shop logo**), scaled to fit. With none set, it prints LOGO. |
 | `style` | A name from `styles`. |
 
 A cell has at most one of `text`, `bind` and `logo`. Positions no cell covers

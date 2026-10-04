@@ -124,6 +124,7 @@ Settings, recent files, crash recovery and the local index live in your Roaming 
 | `recovery.insp`, `recovery.json` | Autosave of unsaved work, offered back after a crash |
 | `.bubbler-index/` | The local search index: every package, or only those outside the Packages root when an Index folder is set |
 | `templates/` | Your shop's own sheet forms, if any — see below |
+| `logo.png` | Your shop logo, if set — see below |
 
 This folder survives updates and uninstalls. Deleting it resets Bubbler+ to factory settings and touches none of your packages.
 
@@ -143,6 +144,8 @@ Every printed sheet is drawn from a form template. The eight built-in forms cove
 Saved forms go in the `templates` folder of your data folder. In Bubbler+, **Settings > Sheet templates** shows how many of your forms loaded and has **Reload** for picking up a new or edited form without restarting.
 
 A form decides the sheet's whole layout: its page, the header grid, which header fields you fill in (job number, machine, or anything your shop needs, like a heat lot), the table's columns, and how many check columns it repeats. Bubbler+ checks every template when it loads. One with a mistake is left out, and you're told which file and why — the other forms keep working. Templates are plain JSON and can be written by hand too: the full format, with examples, is in [TEMPLATE-FORMAT.md](TEMPLATE-FORMAT.md), and the built-in forms in `assets/templates/` are written in it.
+
+**Settings > Shop logo** sets the logo printed in every form's logo cell, on paper, in PDFs and in Excel copies. Pick a PNG or JPG; it's stored as `logo.png` in your data folder, so updates leave it alone. With none set, forms print a LOGO placeholder.
 
 A package carries a copy of every non-built-in form its sheets use, and every inspection record keeps the exact form it was filled on. So a package prints the same on a machine that doesn't have your templates, and an old record still reprints on its original form after the template is changed.
 

@@ -10,6 +10,7 @@ config.json
 # The old third-party symbol font, replaced by SimpleGeoDim (OFL, committed).
 # Still ignored, so a stray local copy can never enter the history.
 assets/Verisurf.ttf
+# The logo used to be read from here; it lives in the data folder now.
 assets/logo.png
 
 # Stray local data, in case an old copy is still lying around the dev folder

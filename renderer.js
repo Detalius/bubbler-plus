@@ -4120,14 +4120,16 @@ function renderSheetPreview() {
 // ---- export ----
 // Built from the same buildPage() as the preview.
 let fontDataUri = null;
-// The print window loads from a data URL and can't reach assets/, so the logo
-// travels as a data URI, like the font.
+// The shop logo, from the data folder (Settings > Shop logo). The print window
+// loads from a data URL and can't reach files, so it travels as a data URI,
+// like the font.
 let logoDataUri = null;
 
 async function loadLogo() {
   try {
-    if (!window.api?.readAsset) return;
-    const bytes = await window.api.readAsset('logo.png');
+    logoDataUri = null;
+    const bytes = await window.api?.readLogo?.();
+    if (!bytes) return;          // none set: the LOGO placeholder
     let bin = '';
     for (const b of bytes) bin += String.fromCharCode(b);
     logoDataUri = 'data:image/png;base64,' + btoa(bin);
@@ -4898,6 +4900,17 @@ function settingsDialog() {
         <button id="cfgTplOpen">Open templates folder</button>
         <button id="cfgTplReload">Reload</button>
       </div>
+      <h3 style="margin-top:16px">Shop logo</h3>
+      <p class="hint">Printed in the logo cell of every sheet and form, and carried into their
+	 Excel copies. PNG or JPG. It is kept in the data folder, so updates leave it alone,
+	 and it takes effect at once; the form editor picks it up when next opened.</p>
+      <div style="display:flex; align-items:center; gap:12px; margin-top:8px">
+        <div id="cfgLogo" style="width:160px; height:64px; display:flex; align-items:center;
+	   justify-content:center; background:#fff; border-radius:4px; color:#888; font-size:12px"></div>
+        <button id="cfgLogoPick">Choose…</button>
+        <button id="cfgLogoClear">Remove</button>
+      </div>
+      <p class="hint" id="cfgLogoMsg" style="display:none; color:#d08a70"></p>
       <div class="actions">
         <button id="cfgTest">Test</button>
         <button id="cfgSetup">Rebuild index</button>
@@ -5045,6 +5058,34 @@ function settingsDialog() {
     showTemplates();
     if (activeSheet()) renderSheets();
   };
+
+  const showLogo = () => {
+    const box = q('#cfgLogo');
+    box.replaceChildren();
+    if (logoDataUri) {
+      const img = document.createElement('img');
+      img.src = logoDataUri;
+      img.alt = 'Shop logo';
+      img.style.cssText = 'max-width:100%; max-height:100%; object-fit:contain';
+      box.append(img);
+    } else {
+      box.textContent = 'None — forms print LOGO';
+    }
+    q('#cfgLogoClear').disabled = !logoDataUri;
+  };
+  showLogo();
+  // Applied at once, like Reload above: Cancel can't un-pick a file.
+  const logoChanged = async r => {
+    const msg = q('#cfgLogoMsg');
+    msg.style.display = r?.ok || r?.canceled ? 'none' : 'block';
+    if (r && !r.ok && !r.canceled) msg.textContent = r.error || 'Could not set the logo.';
+    if (!r?.ok) return;
+    await loadLogo();
+    showLogo();
+    if (activeSheet()) renderSheets();
+  };
+  q('#cfgLogoPick').onclick = async () => logoChanged(await window.api?.chooseLogo?.());
+  q('#cfgLogoClear').onclick = async () => logoChanged(await window.api?.clearLogo?.());
 
   q('#cfgData').onclick = async () => {
     const r = await window.api?.openDataFolder?.();

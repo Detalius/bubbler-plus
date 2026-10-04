@@ -1107,8 +1107,9 @@ function hideToast() { $('toast').hidden = true; }
 // ---------------------------------------------------------------------------
 async function loadLogo() {
   try {
-    if (!api.readAsset) return;
-    const bytes = await api.readAsset('logo.png');
+    logo = null;
+    const bytes = await api.readLogo?.();
+    if (!bytes) return;
     let bin = '';
     for (const b of bytes) bin += String.fromCharCode(b);
     logo = 'data:image/png;base64,' + btoa(bin);
