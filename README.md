@@ -138,7 +138,7 @@ Every printed sheet is drawn from a form template. The eight built-in forms cove
 - **Lay it out** the way you would in Excel: type into cells, drag column and row borders, merge, bold, fill, align.
 - **The table line** marks where the header ends and the table of characteristics begins. Drag it to the right row. The row marked ↻ is the one that repeats, once per characteristic.
 - **Designate** what each cell holds: pick Part Number, Job Number, Dimension, Checks… from the palette and paint the cells. **New field…** adds one your shop needs, like a heat lot. After an import, **Suggest** reads your labels ("Part No.:", "Gage ID") and offers the right field for the cell beside each; click a dashed suggestion to accept it, or **Accept all**.
-- **Too wide for the page?** The strip says so, and **↔ Fit** in the Page group scales the whole form, text and all, to the page's width.
+- **↔ Fit** in the Page group scales the whole form, text and all, to exactly the page's width: up after switching to landscape, down after switching to portrait or importing a sheet wider than the page. Resizing or adding columns keeps the form within the page on its own.
 - The **preview** is drawn exactly as the sheet will print. Tick **Show sample values** to see every field filled in.
 - **Save** is ready when the strip under the grid says so; anything wrong is listed there, and clicking it takes you to the cell. If sheets already use the form you're changing, you're told how many first. Their inspection records keep the form they were filled on.
 
