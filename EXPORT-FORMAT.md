@@ -150,15 +150,22 @@ point it is a different application and a different format.
 
 ---
 
-## Open: sheets vs. records
+## Not covered: records, and form copies
 
-This spec covers **inspection sheets** — the authored form, spec and method, no
-measurements. The manifest also carries **inspections**: filled records with
-`bands[].columns[]` of measured values, plus the initials of the record-maker, the
-date of the recording, and the OP being measured, as well as `jobNumber`, `machine`,
-`author`, `editDate`, and `gageId`.
+This spec covers **inspection sheets** only: the authored form, spec and
+method, no measurements. Two other exports exist, and neither is part of it:
 
-Exporting those is a strictly additive change under the amendment rule above — new 
-columns at the right end — but the measured values are two-dimensional (band × column)
-and do not fit one-dataset-one-column without a flattening convention. Worth deciding
-before the first export ships, since whatever ships first is frozen.
+- **Filled-in records are not exported as data.** That was decided, not
+  deferred: a record's measured values are two-dimensional (band × column) and
+  have no natural place in one-dataset-one-column. A record exports as a PDF,
+  or as an Excel copy of the printed form.
+- **Excel form copies** (File > Export > *Inspection sheets (Excel)* or
+  *Filled-in records (Excel)*) are laid out like the paper form, merged cells
+  and all, for a person to read or a customer who asked for Excel. They are
+  not an interface: their layout follows the form template and may change
+  between versions. Do not point formulas at them.
+
+If a records data export is ever added, it is an amendment under the rule
+above, new columns at the right end, and its flattening convention for band ×
+column values has to be decided before it ships, because whatever ships first
+is frozen.

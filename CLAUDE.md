@@ -48,6 +48,14 @@ Run `npm test` and `check.sh` after every change. Run the e2e suite after
 anything touching save, open, templates, records or the Library, and
 `forms.py` after anything touching the editor, `form-model.js` or `sheet-page.js`.
 
+**Releasing.** `npm version minor` (or `patch`) runs `postversion`: push, push
+tags, then `electron-builder --publish always`, which needs a `GH_TOKEN` in the
+environment to upload, public repo or not. Without one, release by hand:
+`npm version minor --ignore-scripts`, `git push && git push --tags`,
+`npx electron-builder --win --publish never`, then attach the installer, its
+`.blockmap` and `latest.yml` from `dist/` to the GitHub release. The updater
+reads `latest.yml`; a release without it is invisible to installed copies.
+
 ## Rules that have each prevented a real bug
 
 - `renderer.js` and `library.js` are **modules**: a duplicate top-level name is
