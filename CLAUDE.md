@@ -29,6 +29,7 @@ code. Both are private and gitignored.
 | `assets/templates/` | The eight built-in sheet templates. |
 | `tests/` | `node --test` suite. |
 | `tools/font/` | `SimpleGeoDim.sfd`, the symbol font's FontForge source. Generate it over `assets/SimpleGeoDim.ttf`; `tests/font.test.js` checks coverage. |
+| `tools/icon/` | `build.py` writes the app icon (`assets/app-icon*.svg`, `assets/app-icon.png`, `build/icon.ico`) from Liberation Sans Bold 2.1.5 outlines: "Bu" plus a balloon from 32px up, "Bu+" at 16 and 24px. Edit the marks there, not the outputs. |
 | `tools/` | Dev checks: `check.sh` (runs `cssaudit.js` and `handlers.js`), `mockshare.bat` (a fake share for the crawl). `e2e/` is private (gitignored). |
 
 ## Commands

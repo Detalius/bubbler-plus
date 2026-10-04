@@ -1748,7 +1748,7 @@ function createWindow() {
     width: FORMS_MODE ? 1440 : 1500,
     height: FORMS_MODE ? 920 : 980,
     title: FORMS_MODE ? 'Bubbler+ Forms' : 'Bubbler+',
-    ...(FORMS_MODE ? { icon: path.join(__dirname, 'assets', 'forms-icon.png') } : {}),
+    icon: path.join(__dirname, 'assets', FORMS_MODE ? 'forms-icon.png' : 'app-icon.png'),
     backgroundColor: '#2b2b2b',
     webPreferences: {
       contextIsolation: true,
