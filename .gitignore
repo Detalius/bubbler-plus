@@ -1,5 +1,3 @@
-# Save this file as ".gitignore" in the dev folder (no .txt).
-
 # Dependencies and build output — rebuilt from package-lock.json
 node_modules/
 dist/
@@ -26,10 +24,16 @@ Thumbs.db
 desktop.ini
 *.swp
 
+# Python caches, from tools/icon/build.py and the e2e harness
+__pycache__/
+*.pyc
+
 # Scratch
 *.log
 *.bak
 *.tmp
+# Half-written files from the app's atomic saves, if a crash leaves one
+*.bubbler-tmp
 
 # Private working notes and tools
 PLAN.md
