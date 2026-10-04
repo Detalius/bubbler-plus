@@ -255,8 +255,11 @@ export function printCss(fontUri) {
     .page-foot span:nth-child(2){flex:1;text-align:center}
     table{border-collapse:collapse;table-layout:fixed}
     td{border:1px solid #000;padding:0 3px;overflow:hidden;vertical-align:middle}
-    .logo{text-align:center}
-    .logo img{max-width:96%;max-height:92%;object-fit:contain}
+    /* Out of flow, so the image can't size the cell: a percentage max-height in
+       an auto-height cell constrains nothing, and a big logo stretched every
+       header row it spans. The rows keep the form's own heights. */
+    .logo{text-align:center;position:relative}
+    .logo img{position:absolute;left:2%;top:4%;width:96%;height:92%;object-fit:contain}
     .pad{border:none}
     .ch{border-left:none}
     /* Let a check label spill into the blank beside it. The span does the

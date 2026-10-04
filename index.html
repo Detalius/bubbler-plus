@@ -519,8 +519,9 @@
   .paper table { border-collapse: collapse; table-layout: fixed; }
   .paper td { border: 1px solid #000; padding: 0 3px; overflow: hidden;
               vertical-align: middle; }
-  .paper .logo { text-align: center; }
-  .paper .logo img { max-width: 96%; max-height: 92%; object-fit: contain; }
+  /* Out of flow, as in sheet-page.js's print CSS: the image must not size the rows. */
+  .paper .logo { text-align: center; position: relative; }
+  .paper .logo img { position: absolute; left: 2%; top: 4%; width: 96%; height: 92%; object-fit: contain; }
   /* Fills, fonts and alignment come inline from the template; only structure
      lives here. */
   .paper .pad { border: none; }
