@@ -47,3 +47,22 @@ test('custom values are part of what a record hash covers', () => {
   assert.equal(JSON.stringify(c.custom), '{"heat_lot":"H-77"}');
   assert.equal(JSON.stringify(c.sheetCustom), '{"station":"4"}');
 });
+
+// ---- method and notes are shared by both units --------------------------------
+
+test('a package from before 0.2.1 keeps what the mm table typed', () => {
+  const { altUnit, sharedField } = loadRenderer(['EMPTY_ALT', 'altUnit', 'sharedField']);
+  // What 0.2.0 wrote after method and notes were typed with the table in mm.
+  const old = { dimension: '1.000', method: '', notes: '',
+                alternateUnit: { dimension: '25.4', gdt: null, method: 'Caliper', notes: 'Datum A' } };
+  assert.equal(sharedField(old, 'method'), 'Caliper');
+  assert.equal(sharedField(old, 'notes'), 'Datum A');
+  assert.deepEqual({ ...altUnit(old.alternateUnit) }, { dimension: '25.4', gdt: null });
+});
+
+test('the inch side wins when both units were given a method', () => {
+  const { sharedField } = loadRenderer(['sharedField']);
+  const both = { method: 'Micrometer', alternateUnit: { method: 'Caliper' } };
+  assert.equal(sharedField(both, 'method'), 'Micrometer');
+  assert.equal(sharedField({}, 'notes'), '');
+});

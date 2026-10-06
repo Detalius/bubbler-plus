@@ -808,7 +808,15 @@ function renderDocList() {
 // ---------------------------------------------------------------------------
 // A characteristic's spec in the other unit. Typed by hand, never converted.
 const EMPTY_ALT = { dimension: '', gdt: null };
-const altUnit = a => ({ ...EMPTY_ALT, ...(a || {}) });
+// Method and notes are shared by both units and live on the characteristic.
+// Builds before 0.2.1 let the mm table write them here, so they're dropped.
+const altUnit = a => {
+  const { method, notes, ...spec } = a || {};
+  return { ...EMPTY_ALT, ...spec };
+};
+// A shared field as loaded: the characteristic's own, else what an older build
+// stranded on the alternate. The inch side wins when both were filled.
+const sharedField = (c, k) => c[k] || c.alternateUnit?.[k] || '';
 
 // A GD&T frame as stored: the builder's tokens, plus parsed datums and the
 // rendered text for sheets and exports.
@@ -1014,14 +1022,14 @@ function applyManifest(m) {
         dimension: c.dimension ?? '',
         gdt: gdtIn(c.gdt),
         alternateUnit: altUnit(c.alternateUnit),
-        method: c.method || '',
-        notes: c.notes || '',
+        method: sharedField(c, 'method'),
+        notes: sharedField(c, 'notes'),
         subs: (c.subs || []).map(sd => ({
           dimension: sd.dimension ?? '',
           gdt: gdtIn(sd.gdt),
           alternateUnit: altUnit(sd.alternateUnit),
-          method: sd.method || '',
-          notes: sd.notes || ''
+          method: sharedField(sd, 'method'),
+          notes: sharedField(sd, 'notes')
         }))
       }
     });
@@ -2677,7 +2685,7 @@ function dimRows(el) {
   numTd.rowSpan = 1 + c.subs.length;
   main.appendChild(numTd);
 
-  appendEditCells(main, unitView(c));
+  appendEditCells(main, c);
   out.push(main);
 
   c.subs.forEach((sub, i) => {
@@ -2690,7 +2698,7 @@ function dimRows(el) {
       markDirty();
       renderDimTable();
     }));
-    appendEditCells(tr, unitView(sub));
+    appendEditCells(tr, sub);
     out.push(tr);
   });
 
@@ -2698,10 +2706,12 @@ function dimRows(el) {
 }
 
 // The four cells main and sub rows share. The rendered cell is built first so
-// the editor can repaint it, but appended last.
+// the editor can repaint it, but appended last. Only the spec follows the unit
+// toggle; method and notes are one field for both units.
 function appendEditCells(tr, c) {
   const render = renderCell();
-  tr.appendChild(tolCell(c, render.preview));
+  render.preview.shared = c;          // whose notes the callout shows, in either unit
+  tr.appendChild(tolCell(unitView(c), render.preview));
   tr.appendChild(plainCell(c, 'method', 'method', 'e.g. calipers', METHOD_LIST));
   tr.appendChild(notesCell(c, render.preview));
   tr.appendChild(render.td);
@@ -2798,17 +2808,19 @@ function notesCell(c, preview) {
   td.dataset.col = 'notes';
   td.appendChild(textInput(c.notes, v => {
     c.notes = v;
-    paintSpec(preview, c);
+    paintSpec(preview, unitView(c));   // the spec in the unit being shown
     markDirty();
   }, ''));
   return td;
 }
 
 // The only writer of the rendered cell. toFont() here and nowhere upstream: the
-// callout is stored as Unicode.
+// callout is stored as Unicode. `c` is the spec in the table's unit; the notes
+// come from the characteristic itself, as they do on sheets (specSource).
 function paintSpec(preview, c) {
   if (!preview) return;
-  const txt = toFont(renderSpec(c));
+  const notes = (preview.shared || c).notes;
+  const txt = toFont(renderSpec({ dimension: c.dimension, gdt: c.gdt, notes }));
   preview.textContent = txt || '\u2014';
   preview.classList.toggle('empty', !txt);
 }
