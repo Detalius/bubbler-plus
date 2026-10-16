@@ -6,16 +6,16 @@
   "page": {"size": [8.5, 11], "marginTop": 0.2569, "marginBottom": 0.5},
   "font": {"family": "Arial", "size": 8.0},
   "styles": {
-    "title": {"fill": "#d9d9d9", "align": "center", "size": 9.7},
-    "label": {"fill": "#d9d9d9", "size": 7.0, "wrap": false},
+    "title": {"fill": "#f2f2f2", "align": "center", "size": 9.7},
+    "label": {"fill": "#f2f2f2", "size": 7.0, "wrap": false},
     "value": {"size": 7.0},
-    "heading": {"fill": "#d9d9d9", "align": "center"},
-    "checkLabel": {"fill": "#d9d9d9", "size": 4.92},
-    "checkValue": {"fill": "#d9d9d9", "align": "center", "size": 6.0},
+    "heading": {"fill": "#f2f2f2", "align": "center"},
+    "checkLabel": {"fill": "#f2f2f2", "size": 4.92},
+    "checkValue": {"fill": "#f2f2f2", "align": "center", "size": 6.0},
     "section": {"fill": "#ededed", "bold": true},
     "centered": {"align": "center"},
     "callout": {"align": "center", "font": "symbol"},
-    "shaded": {"fill": "#d9d9d9", "align": "center"}
+    "shaded": {"fill": "#f2f2f2", "align": "center"}
   },
   "fields": [
     {"key": "record.jobNumber", "label": "Job Number"},

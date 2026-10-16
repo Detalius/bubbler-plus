@@ -63,7 +63,7 @@ bottom of the page, where the footer sits.
 ```json
 "font": { "family": "Arial", "size": 8.3 },
 "styles": {
-  "label":   { "fill": "#d9d9d9", "size": 7.3, "wrap": false },
+  "label":   { "fill": "#f2f2f2", "size": 7.3, "wrap": false },
   "callout": { "align": "center", "font": "symbol" }
 }
 ```

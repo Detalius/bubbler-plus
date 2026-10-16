@@ -3121,6 +3121,19 @@ function textInput(value, onCommit, placeholder) {
 // input's position within the cell, or the nearest when that row has fewer.
 // Runs on Enter / Shift+Enter in a table field.
 function moveRow(input, dir) {
+  // Inspect's rows are divs, so each of its fields carries its own data-col.
+  // A check column runs down through Date and Initials into the results.
+  const line = input.closest('.ins-row');
+  if (line && input.dataset.col) {
+    let row = dir > 0 ? line.nextElementSibling : line.previousElementSibling;
+    while (row) {
+      const target = row.querySelector(`input[data-col="${input.dataset.col}"]:not([disabled])`);
+      if (target) { target.focus(); target.select(); return true; }
+      row = dir > 0 ? row.nextElementSibling : row.previousElementSibling;
+    }
+    return false;
+  }
+
   const td = input.closest('td');
   const tr = td?.parentElement;
   if (!td || !tr) return false;
@@ -3660,7 +3673,9 @@ function itemRowEl(sh, groups, g, gi, excluded, it, isSub) {
 
   const spec = document.createElement('span');
   spec.className = 'spec';
-  spec.textContent = d ? (toFont(renderSpec(d.c)) || '\u2014') : '(missing)';
+  // In the sheet's units, as it prints; an mm sheet with no mm spec shows the dash.
+  const src = d && specSource(d.c, sh.units);
+  spec.textContent = d ? ((src && toFont(renderSpec(src))) || '\u2014') : '(missing)';
   row.appendChild(spec);
 
   if (it.override?.spec || it.override?.method) {
@@ -4401,7 +4416,7 @@ function renderInspRows() {
       cells.className = 'ins-cells';
       for (let c = 0; c < cols; c++) {
         band.columns[c] = band.columns[c] || [];
-        cells.appendChild(colInput(band.columns[c], li, lab.replace(':', '')));
+        cells.appendChild(colInput(band.columns[c], li, lab.replace(':', ''), null, `v${c}`));
       }
       row.appendChild(cells);
       host.appendChild(row);
@@ -4438,12 +4453,12 @@ function renderInspRows() {
       // Shared across bands but editable in each; edits mirror live.
       line.appendChild(sharedSpecInput(row, i));
 
-      line.appendChild(gageCol ? colInput(rb, 'gageId', 'gage', 'gage') : el('span', 'lbl'));
+      line.appendChild(gageCol ? colInput(rb, 'gageId', 'gage', 'gage', 'gage') : el('span', 'lbl'));
 
       const cells = document.createElement('div');
       cells.className = 'ins-cells';
       rb.values = rb.values || [];
-      for (let c = 0; c < cols; c++) cells.appendChild(colInput(rb.values, c, 'result'));
+      for (let c = 0; c < cols; c++) cells.appendChild(colInput(rb.values, c, 'result', null, `v${c}`));
       line.appendChild(cells);
       host.appendChild(line);
     });
@@ -4464,6 +4479,7 @@ function sharedSpecInput(row, rowIndex) {
   i.type = 'text';
   i.className = 'symtext spec';
   i.dataset.specRow = String(rowIndex);
+  i.dataset.col = 'spec';
   i.value = toFont(row.spec || '');
   i.placeholder = 'dimension';
   const hk = `spec${rowIndex}`;      // shared: all bands of a row are one edit
@@ -4480,10 +4496,12 @@ function sharedSpecInput(row, rowIndex) {
 }
 
 // One cell of a string array — used for both the head labels and the results.
-function colInput(arr, idx, placeholder, cls) {
+// `col` is the column Enter walks down.
+function colInput(arr, idx, placeholder, cls, col) {
   const i = document.createElement('input');
   i.type = 'text';
   i.className = 'symtext ' + (cls || 'cell');
+  i.dataset.col = col;
   i.value = toFont(arr[idx] || '');
   i.placeholder = placeholder;
   const hk = nextBurstKey();

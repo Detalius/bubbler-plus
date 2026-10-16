@@ -220,7 +220,7 @@ test('a check edit lands on every copy', () => {
   const box = run.c0 + 2 * run.w + 1;
   F.forEachCheckTwin(G, G.table, box, (r, c) => F.format(G, r, c, r, c, { fill: '#ffff00' }));
   for (let k = 0; k < run.n; k++) assert.equal(F.cellAt(G, G.table, run.c0 + k * run.w + 1).fill, '#ffff00');
-  assert.equal(F.cellAt(G, G.table, run.c0).fill, '#d9d9d9');
+  assert.equal(F.cellAt(G, G.table, run.c0).fill, '#f2f2f2');
 });
 
 test('a header gap the table splits stays one blank cell', () => {

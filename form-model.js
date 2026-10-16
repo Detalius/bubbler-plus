@@ -813,9 +813,9 @@ export function starterGrid(orientation = 'landscape') {
   G.headRows = 2;
   G.cells = {};
   G.merges = [];
-  const label = { fill: '#d9d9d9' };
+  const label = { fill: '#f2f2f2' };
   merge(G, 0, 0, 0, 9);
-  G.cells['0,0'] = { text: 'Inspection Report', bold: true, align: 'center', size: 12, fill: '#d9d9d9' };
+  G.cells['0,0'] = { text: 'Inspection Report', bold: true, align: 'center', size: 12, fill: '#f2f2f2' };
   const pair = (r, c0, c1, text, c2, c3, des) => {
     merge(G, r, c0, r, c1); G.cells[key(r, c0)] = { text, ...label };
     merge(G, r, c2, r, c3); G.cells[key(r, c2)] = { des };
@@ -824,7 +824,7 @@ export function starterGrid(orientation = 'landscape') {
   pair(1, 4, 5, 'Job Number', 6, 9, 'record.jobNumber');
   pair(2, 0, 1, 'Part Name', 2, 3, 'part.name');
   pair(2, 4, 5, 'Machine', 6, 9, 'record.machine');
-  const head = { fill: '#d9d9d9', align: 'center' };
+  const head = { fill: '#f2f2f2', align: 'center' };
   const t = G.table, dr = t + G.headRows;
   [['Balloon', 'number'], ['Dimension', 'spec'], ['Method', 'method'], ['Gage ID', 'gage']].forEach(([text, kind], c) => {
     merge(G, t, c, t + 1, c);
@@ -833,10 +833,10 @@ export function starterGrid(orientation = 'landscape') {
   });
   for (let n = 0; n < 3; n++) {
     const c = 4 + n * 2;
-    G.cells[key(t, c)] = { text: 'Date:', fill: '#d9d9d9', size: 6 };
-    G.cells[key(t + 1, c)] = { text: 'Initials:', fill: '#d9d9d9', size: 6 };
-    G.cells[key(t, c + 1)] = { fill: '#d9d9d9', align: 'center' };
-    G.cells[key(t + 1, c + 1)] = { fill: '#d9d9d9', align: 'center' };
+    G.cells[key(t, c)] = { text: 'Date:', fill: '#f2f2f2', size: 6 };
+    G.cells[key(t + 1, c)] = { text: 'Initials:', fill: '#f2f2f2', size: 6 };
+    G.cells[key(t, c + 1)] = { fill: '#f2f2f2', align: 'center' };
+    G.cells[key(t + 1, c + 1)] = { fill: '#f2f2f2', align: 'center' };
     merge(G, dr, c, dr, c + 1);
     G.cells[key(dr, c)] = { des: 'body.check', align: 'center' };
   }
