@@ -130,7 +130,7 @@ export function blankGrid(orientation = 'landscape') {
     cells: {}, merges: [],
     table: 4, headRows: 1,
     fields: {}, bands: 1,
-    section: { fill: '#ededed', bold: true },
+    section: { fill: '#f2f2f2', bold: true },
     footer: [{ text: 'Page {page.number} of {page.count}', align: 'left', bottom: 0.13, size: 7.6 }]
   };
   return G;
