@@ -69,6 +69,14 @@
       "perMachine": false,
       "include": "build/installer.nsh"
     },
+    "fileAssociations": [
+      {
+        "ext": "insp",
+        "name": "Bubbler+ Package",
+        "description": "Bubbler+ inspection package",
+        "icon": "build/icon.ico"
+      }
+    ],
     "extraResources": [
       {
         "from": "build/forms.ico",

@@ -260,7 +260,8 @@ ipcMain.handle('dialog:open', async (_event, intent) => {
   if (result.canceled || !result.filePaths.length) return null;
   const file = result.filePaths[0];
   const buffer = await fs.readFile(file);
-  return { name: path.basename(file), path: file, data: new Uint8Array(buffer) };
+  return { name: path.basename(file), path: file, data: new Uint8Array(buffer),
+           stamp: await fileStamp(file) };
 });
 
 // A file's size and mtime, or null if it's absent. Both, since mtime alone is
@@ -1646,6 +1647,7 @@ function buildMenu() {
         { label: 'Clear Annotations', click: () => send('clear') },
         { type: 'separator' },
         { label: 'Drawing Info…', click: () => send('docinfo') },
+        { label: 'Replace Drawing (New Revision)…', click: () => send('replacedrawing') },
         { type: 'separator' },
         { label: 'Settings…', click: () => send('settings') }
       ]
@@ -1793,6 +1795,16 @@ ipcMain.handle('update:install', () => {
 // ---------------------------------------------------------------------------
 // App lifecycle
 // ---------------------------------------------------------------------------
+// A package Windows launched the app with (a double-clicked .insp). The page
+// asks once at boot; a reload finds nothing, so it never reopens.
+let launchFile = FORMS_MODE ? null
+  : process.argv.slice(1).find(a => /\.insp$/i.test(a) && fsSync.existsSync(a)) || null;
+ipcMain.handle('launch:file', () => {
+  const file = launchFile;
+  launchFile = null;
+  return file;
+});
+
 function createWindow() {
   win = new BrowserWindow({
     width: FORMS_MODE ? 1440 : 1500,

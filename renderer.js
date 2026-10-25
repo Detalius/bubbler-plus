@@ -750,6 +750,102 @@ async function removeDocument(id) {
   }
 }
 
+// Edit > Replace Drawing (New Revision)…: swaps a drawing's PDF in place. The
+// drawing keeps its id, file and label, so every bubble and annotation on it
+// stays put; only the bytes change.
+async function replaceDrawing() {
+  if (recordMode) {
+    await notify('Not in a record', 'Open the package to replace one of its drawings.');
+    return;
+  }
+  if (!docs.length) {
+    await notify('No drawing to replace', 'Add a drawing to this package first.');
+    return;
+  }
+  let id = docs.length === 1 ? docs[0].id : null;
+  if (!id) {
+    const { button, values } = await dialog({
+      title: 'Replace drawing',
+      body: 'Pick the drawing the new revision replaces.',
+      fields: [{ key: 'id', label: 'Drawing', type: 'select', value: activeDocId,
+                 options: docs.map(d => ({ value: d.id, label: d.label })) }],
+      buttons: ['cancel', 'next'],
+      defaultId: 'next'
+    });
+    if (button !== 'next') return;
+    id = values.id;
+  }
+  const old = docs.find(d => d.id === id);
+  if (!old) return;
+
+  const picked = await window.api?.openFile?.('pdf');
+  if (!picked) return;
+  let proxy;
+  try {
+    proxy = await pdfjsLib.getDocument({ data: picked.data.slice(0) }).promise;
+  } catch (err) {
+    await notify('Could not read that PDF', err.message);
+    return;
+  }
+
+  // Annotations on pages the new revision lacks stay in the package but cannot show.
+  const stranded = elements.filter(e => e.documentId === id && e.pdfPage >= proxy.numPages).length;
+  if (stranded) {
+    const ok = await confirmAction(`Replace "${old.label}"?`,
+      `The new drawing has ${proxy.numPages} page${proxy.numPages === 1 ? '' : 's'}, and ` +
+      `${stranded} annotation${stranded === 1 ? ' sits' : 's sit'} on a later page. ` +
+      'They are kept, but will not show until a drawing with that page replaces this one.',
+      'Replace');
+    if (!ok) { await proxy.destroy(); return; }
+  }
+
+  const resized = await pageSizesDiffer(old.pdfjs, proxy);
+  pushHistory();
+  const bytes = picked.data.buffer;
+  const next = {
+    ...old,
+    bytes,
+    sha256: await sha256(bytes.slice(0)),
+    receivedUtc: new Date().toISOString(),
+    pdfjs: proxy,
+    numPages: proxy.numPages
+  };
+  // The old record lives on in the undo stack; settleDocs() rebuilds its proxy.
+  try { await old.pdfjs?.destroy(); } catch { /* already gone */ }
+  old.pdfjs = null;
+  docs = docs.map(d => (d.id === id ? next : d));
+  markDirty(`Drawing “${old.label}”`);
+  if (activeDocId === id) await setActiveDoc(id); else renderDocList();
+
+  const { button, values } = await dialog({
+    title: 'Drawing replaced',
+    body: `"${old.label}" now shows ${picked.name}.`,
+    fields: [{ key: 'rev', label: 'Package revision', value: doc.part.revision || '',
+               width: '120px' }],
+    note: resized ? 'The new drawing’s page size differs from the old one. ' +
+                    'Check that the bubbles still sit on their features.' : '',
+    noteTone: 'warn',
+    buttons: ['ok'],
+    defaultId: 'ok'
+  });
+  if (button === 'ok' && values.rev.trim() !== (doc.part.revision || '')) {
+    doc.part.revision = values.rev.trim();
+    syncDocFields();
+    markDirty();
+  }
+}
+
+// True when any page both drawings share differs in size by more than a point.
+async function pageSizesDiffer(a, b) {
+  if (!a || !b) return false;
+  for (let i = 1; i <= Math.min(a.numPages, b.numPages); i++) {
+    const [va, vb] = [(await a.getPage(i)).view, (await b.getPage(i)).view];
+    if (Math.abs((va[2] - va[0]) - (vb[2] - vb[0])) > 1 ||
+        Math.abs((va[3] - va[1]) - (vb[3] - vb[1])) > 1) return true;
+  }
+  return false;
+}
+
 function renderDocList() {
   const ul = $('docList');
   ul.innerHTML = '';
@@ -6579,26 +6675,32 @@ function elementsFromManifest(m, docId) {
   return [...bubbles, ...annos];
 }
 
-// The bubbled drawing, from File > Export….
+// The bubbled drawings, from File > Export…: every drawing in package order,
+// one file. A single drawing is stamped in place, keeping its own metadata.
 async function exportPdf() {
-  if (!originalBytes || !activeDocId) {
+  if (!docs.length) {
     await notify('No drawing to export', 'Add a drawing to this package first.');
     return;
   }
-  const out = await PDFDocument.load(originalBytes.slice(0));
-
-  // Plain text stamps in the symbol font, so annotations carry GD&T symbols;
-  // bold and italic in Helvetica. See stampFonts().
-  const fonts = await stampFonts(out);
-  const font = fonts[''];
-  const pages = out.getPages();
-
-  // Only the active drawing is stamped — each PDF exports as its own file.
-  stampElements(pages, elements.filter(e => e.documentId === activeDocId), fonts);
+  const stamped = [];
+  for (const d of docs) {
+    const one = await PDFDocument.load(d.bytes.slice(0));
+    // Plain text stamps in the symbol font, so annotations carry GD&T symbols;
+    // bold and italic in Helvetica. See stampFonts().
+    stampElements(one.getPages(), elements.filter(e => e.documentId === d.id), await stampFonts(one));
+    stamped.push(one);
+  }
+  let out = stamped[0];
+  if (stamped.length > 1) {
+    out = await PDFDocument.create();
+    for (const one of stamped) {
+      for (const page of await out.copyPages(one, one.getPageIndices())) out.addPage(page);
+    }
+  }
 
   const bytes = await out.save();
   const stem = [doc.part.number || 'drawing', doc.part.revision && `Rev${doc.part.revision}`,
-                activeDoc()?.label]
+                docs.length === 1 && docs[0].label]
     .filter(Boolean).join('_').replace(/[^\w.-]+/g, '_');
   await saveBytes(bytes, `${stem}_bubbled.pdf`, 'application/pdf',
     [{ name: 'PDF', extensions: ['pdf'] }]);
@@ -6691,7 +6793,8 @@ async function openRecent(it) {
   if (dirty && !(await confirmAction('Discard unsaved changes?',
       'The package currently open has edits that have not been saved.', 'Discard'))) return;
   try {
-    const { bytes } = await window.api.readPackage(it.file);
+    const { bytes, stamp } = await window.api.readPackage(it.file);
+    pendingStamp = stamp || null;
     await loadFile(it.name, bytes.buffer, it.file);
   } catch (err) {
     await notify('Could not open the package', err.message);
@@ -6818,6 +6921,7 @@ async function pickFile(intent) {
     if (window.api?.openFile) {
       const picked = await window.api.openFile(intent);
       if (!picked) return;                       // cancelled
+      pendingStamp = picked.stamp || null;
       await loadFile(picked.name, picked.data.buffer, picked.path);
     } else {
       fileInput.accept = intent === 'pdf' ? 'application/pdf' : '.insp,application/pdf';
@@ -6930,12 +7034,16 @@ loadLogo();
 startAutosave();
 showLauncher();
 // Recovery may replace the launcher with a recovered session. A template that
-// failed to load is reported after it, so the two prompts never stack.
-Promise.all([shopTemplatesLoaded, offerRecovery()]).then(() => {
+// failed to load is reported after it, so the two prompts never stack. A
+// double-clicked package opens last, through the Library's path, so a
+// recovered session gets the usual discard prompt first.
+Promise.all([shopTemplatesLoaded, offerRecovery()]).then(async () => {
   const n = templateProblems.length;
-  if (n) notify(`${n} sheet template${n === 1 ? '' : 's'} could not be loaded`,
+  if (n) await notify(`${n} sheet template${n === 1 ? '' : 's'} could not be loaded`,
     `${templateProblemText()}\n\nThe other forms work as normal. Fix or remove the file, ` +
     'then use Reload in Settings > Sheet templates.');
+  const file = await window.api?.launchFile?.();
+  if (file) await window.openPackageForEdit(file);
 });
 
 // Clicks on the grey margin around the stage deselect.
@@ -7052,6 +7160,7 @@ if (window.api?.onMenuAction) {
       case 'undo':    textField(document.activeElement) ? document.execCommand('undo') : undo(); break;
       case 'redo':    textField(document.activeElement) ? document.execCommand('redo') : redo(); break;
       case 'docinfo': openModal('edit'); break;
+      case 'replacedrawing': replaceDrawing().catch(err => notify('Could not replace the drawing', err.message)); break;
       case 'history': historyDialog(); break;
       case 'settings': settingsDialog(); break;
       case 'checkupdate': checkForUpdates({ manual: true }); break;

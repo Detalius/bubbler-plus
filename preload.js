@@ -45,6 +45,7 @@ contextBridge.exposeInMainWorld('api', {
   onIndexProgress: cb => { ipcRenderer.on('index-progress', (_e, p) => cb(p)); },
   resolveSource: query => ipcRenderer.invoke('source:resolve', query),
   readPackage: file => ipcRenderer.invoke('package:read', file),
+  launchFile: () => ipcRenderer.invoke('launch:file'),
   packageStamp: file => ipcRenderer.invoke('package:stamp', file),
   lockAcquire: file => ipcRenderer.invoke('lock:acquire', file),
   lockRelease: () => ipcRenderer.invoke('lock:release'),
