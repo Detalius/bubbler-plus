@@ -14,7 +14,7 @@ Built for small-shop QC: first article reports, in-process checks, final reports
 ## What it does
 
 - **Bubble a drawing.** Numbered balloons, reference balloons, leaders, boxes, lines and text notes, over any PDF. Handles multi-page pdfs and can store multiple drawings per package. When a drawing changes revision, Edit > Replace Drawing swaps in the new PDF and every balloon stays where it was.
-- **List the dimensions.** One primary callout per balloon, sub-callouts tied to any balloon, separate lists for inches and millimetres, with a GD&T frame builder for feature control frames.
+- **List the dimensions.** One primary callout per balloon, sub-callouts tied to any balloon, separate lists for inches and millimetres, with a GD&T frame builder for feature control frames. Each callout carries its notes, inspection method and gage ID, which print on blank sheets and pre-fill new records.
 - **Author inspection sheets.** Pick the form it prints on: the built-in In-Process, First Article, Multi-Part First Article or Final, in portrait or landscape, or one of your shop's own (see [Your own forms](#your-own-forms)). Pick which dimensions go on which sheet, and override dimensions or recommended inspection method for any individual dimension.
 - **Record an inspection.** Fill out any sheet you've created with actual numbers. Records snapshot the package as it *was*, so any changes (remove bubbles, add bubbles, fix a mistake) won't appear — if a dimension was wrong, you'll see it in any past records.
 - **Find it again.** Packages publish themselves to an index as they are saved, so you can Quick Find a package by part number, part name, customer or file name.

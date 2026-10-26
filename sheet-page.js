@@ -210,7 +210,9 @@ export function buildPage(ctx, rows, pageNo, pageCount, { logo = null, toFont = 
             break;
           case 'spec':   cell(toFont(row.spec || ''), spans[ci][0], spans[ci][1], st); break;
           case 'method': cell(row.method || '', spans[ci][0], spans[ci][1], st); break;
-          case 'gage':   cell(toFont(rb.gageId || ''), spans[ci][0], spans[ci][1], st); break;
+          // A record's band holds its own (even when cleared); a blank sheet's
+          // row has no bands and prints the characteristic's.
+          case 'gage':   cell(toFont(rb.gageId ?? row.gageId ?? ''), spans[ci][0], spans[ci][1], st); break;
           case 'notes':  cell(row.notes || '', spans[ci][0], spans[ci][1], st); break;
           case 'check':
             spans[ci].forEach(([a, , z], k) => cell(toFont((rb.values || [])[k] || ''), a, z, st));

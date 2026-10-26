@@ -315,7 +315,7 @@
   /* Fixed layout, so a long callout ellipsizes instead of widening its column. */
   /* The min-width floor makes .dim-scroll scroll: without it, the one unsized
      column (the rendered callout) shrinks to zero in a narrow window. */
-  #dimTable { width: 100%; min-width: 900px; table-layout: fixed;
+  #dimTable { width: 100%; min-width: 760px; table-layout: fixed;
               border-collapse: collapse; font-size: 12.5px; }
   #dimTable thead th { position: sticky; top: 0; z-index: 1; text-align: left;
                        background: #262626; color: var(--ink-dim); font-weight: 500;
@@ -362,14 +362,8 @@
   .tol-inputs input.dim.wide { flex: 1; width: auto; min-width: 0; }
   .tol-inputs input.gdt { width: 218px; flex: none;
                           font-family: ui-monospace, monospace; }
-  /* The rendered callout, padded to sit level with the input row. */
-  #dimTable td.render { padding-top: 9px; overflow: hidden; }
-  .spec-render { font-family: 'SimpleGeoDim', Arial, sans-serif; font-size: 14px;
-                 color: #fff; min-height: 19px; white-space: nowrap;
-                 overflow: hidden; text-overflow: ellipsis; }
-  .spec-render.empty { color: #5f5f5f; font-family: inherit; font-size: 12px; }
-
-  #dimTable td.method input, #dimTable td.notes input { width: 100%; }
+  #dimTable td.method input, #dimTable td.notes input,
+  #dimTable td.gage input { width: 100%; }
   .dim-empty { color: #6f6f6f; font-style: italic; padding: 24px 4px; }
 
   /* Read-only reference view of the bubbled drawing. */
@@ -975,10 +969,10 @@
               <tr>
                 <th style="width:30px" aria-label="Add or remove"></th>
                 <th style="width:44px">#</th>
-                <th id="dimColHead" style="width:360px">Dimension &amp; tolerance</th>
-                <th style="width:130px">Method</th>
-                <th style="width:170px">Notes</th>
-                <th>Rendered</th>
+                <th id="dimColHead">Dimension &amp; tolerance</th>
+                <th style="width:150px">Notes</th>
+                <th style="width:120px">Method</th>
+                <th style="width:110px">Gage ID</th>
               </tr>
             </thead>
             <tbody id="dimBody"></tbody>

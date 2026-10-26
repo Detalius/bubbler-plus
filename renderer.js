@@ -273,7 +273,7 @@ async function confirmAction(message, detail, okLabel = 'OK', opts = {}) {
 // ---------------------------------------------------------------------------
 // Package state
 // ---------------------------------------------------------------------------
-const SCHEMA_VERSION = '0.39.0';
+const SCHEMA_VERSION = '0.40.0';
 // version is a fallback; the real one comes from package.json via main.
 const APP = { name: 'BubblerPlus', version: '0.1.0' };
 window.api?.appVersion?.().then(v => { if (v) APP.version = v; });
@@ -960,6 +960,7 @@ async function buildManifest() {
       gdt: gdtOut(e.char?.gdt),
       alternateUnit: altUnit(e.char?.alternateUnit),
       method: e.char?.method ?? '',
+      gageId: e.char?.gageId ?? '',
       notes: e.char?.notes ?? '',
       // Stacked features under one number (chamfer size + angle).
       subs: (e.char?.subs ?? []).map(sd => ({
@@ -967,6 +968,7 @@ async function buildManifest() {
         gdt: gdtOut(sd.gdt),
         alternateUnit: altUnit(sd.alternateUnit),
         method: sd.method ?? '',
+        gageId: sd.gageId ?? '',
         notes: sd.notes ?? ''
       })),
       bubble: {
@@ -1119,12 +1121,15 @@ function applyManifest(m) {
         gdt: gdtIn(c.gdt),
         alternateUnit: altUnit(c.alternateUnit),
         method: sharedField(c, 'method'),
+        // Not in packages before schema 0.40.0; those load with it blank.
+        gageId: c.gageId ?? '',
         notes: sharedField(c, 'notes'),
         subs: (c.subs || []).map(sd => ({
           dimension: sd.dimension ?? '',
           gdt: gdtIn(sd.gdt),
           alternateUnit: altUnit(sd.alternateUnit),
           method: sharedField(sd, 'method'),
+          gageId: sd.gageId ?? '',
           notes: sharedField(sd, 'notes')
         }))
       }
@@ -2243,7 +2248,7 @@ function commitCreate(a, b) {
       leader: dist > DEADZONE ? { toX: a.x, toY: a.y } : null,
       style,
       char: { dimension: '',
-              gdt: emptyGdt(), alternateUnit: altUnit(), method: '', notes: '', subs: [] }
+              gdt: emptyGdt(), alternateUnit: altUnit(), method: '', gageId: '', notes: '', subs: [] }
     };
   }
   if (tool === 'refbubble') {
@@ -2751,11 +2756,11 @@ function renderDimTable() {
 // A blank sub-characteristic: same shape as a main one, minus the bubble link.
 function newSub() {
   return { dimension: '', gdt: emptyGdt(), alternateUnit: altUnit(),
-           method: '', notes: '' };
+           method: '', gageId: '', notes: '' };
 }
 
 // One characteristic's main row plus a row per sub. Columns: [+/−] [#] [editor]
-// [method] [notes] [rendered]. The number cell spans them all, which pushes each
+// [notes] [method] [gage]. The number cell spans them all, which pushes each
 // sub-row's first cell into the action column, so + and − line up.
 function dimRows(el) {
   const c = el.char;
@@ -2801,16 +2806,13 @@ function dimRows(el) {
   return out;
 }
 
-// The four cells main and sub rows share. The rendered cell is built first so
-// the editor can repaint it, but appended last. Only the spec follows the unit
-// toggle; method and notes are one field for both units.
+// The four cells main and sub rows share, in the sheets' order. Only the spec
+// follows the unit toggle; notes, method and gage are one field for both units.
 function appendEditCells(tr, c) {
-  const render = renderCell();
-  render.preview.shared = c;          // whose notes the callout shows, in either unit
-  tr.appendChild(tolCell(unitView(c), render.preview));
+  tr.appendChild(tolCell(unitView(c)));
+  tr.appendChild(plainCell(c, 'notes', 'notes', ''));
   tr.appendChild(plainCell(c, 'method', 'method', 'e.g. calipers', METHOD_LIST));
-  tr.appendChild(notesCell(c, render.preview));
-  tr.appendChild(render.td);
+  tr.appendChild(plainCell(c, 'gage', 'gageId', 'e.g. CAL-07'));
 }
 
 // A narrow leading column holding one button.
@@ -2826,16 +2828,6 @@ function actionCell(glyph, title, onClick) {
   btn.onclick = onClick;
   td.appendChild(btn);
   return td;
-}
-
-function renderCell() {
-  const td = document.createElement('td');
-  td.className = 'render';
-  td.dataset.col = 'render';
-  const preview = document.createElement('div');
-  preview.className = 'spec-render';
-  td.appendChild(preview);
-  return { td, preview };
 }
 
 // Inserts at the caret of the table field focused last. Runs from the symbol
@@ -2879,10 +2871,10 @@ document.querySelectorAll('.unit-btn').forEach(btn => {
   };
 });
 
-function tolCell(c, preview) {
+function tolCell(c) {
   const td = document.createElement('td');
   td.dataset.col = 'tol';
-  td.appendChild(tolEditor(c, preview));
+  td.appendChild(tolEditor(c));
   return td;
 }
 
@@ -2894,31 +2886,6 @@ function plainCell(c, col, field, placeholder, suggest) {
   if (suggest?.length) attachSuggest(input, suggest);
   td.appendChild(input);
   return td;
-}
-
-// Notes are appended to the rendered callout, so editing them repaints the
-// last cell of the same row.
-function notesCell(c, preview) {
-  const td = document.createElement('td');
-  td.className = 'notes';
-  td.dataset.col = 'notes';
-  td.appendChild(textInput(c.notes, v => {
-    c.notes = v;
-    paintSpec(preview, unitView(c));   // the spec in the unit being shown
-    markDirty();
-  }, ''));
-  return td;
-}
-
-// The only writer of the rendered cell. toFont() here and nowhere upstream: the
-// callout is stored as Unicode. `c` is the spec in the table's unit; the notes
-// come from the characteristic itself, as they do on sheets (specSource).
-function paintSpec(preview, c) {
-  if (!preview) return;
-  const notes = (preview.shared || c).notes;
-  const txt = toFont(renderSpec({ dimension: c.dimension, gdt: c.gdt, notes }));
-  preview.textContent = txt || '\u2014';
-  preview.classList.toggle('empty', !txt);
 }
 
 // ---------------------------------------------------------------------------
@@ -2987,15 +2954,12 @@ function parseDatums(text) {
 }
 
 // The dimension cell's editor: a free-text callout, or a toggle into the frame
-// builder. Repaints the row's rendered cell (`preview`) directly.
-function tolEditor(c, preview) {
+// builder.
+function tolEditor(c) {
   const row = document.createElement('div');
   row.className = 'tol-inputs';
 
-  const refresh = () => {
-    paintSpec(preview, c);
-    markDirty();
-  };
+  const refresh = () => markDirty();
 
   const isGdt = () => !!(c.gdt && typeof c.gdt === 'object' && c.gdt.symbol);
 
@@ -3029,9 +2993,6 @@ function tolEditor(c, preview) {
   };
 
   build();
-  // Paint, but do NOT refresh(): building a row is rendering, not editing, and
-  // refresh() marks the package dirty.
-  paintSpec(preview, c);
   return row;
 }
 
@@ -4196,6 +4157,7 @@ function rowsFromSheet(sh, items) {
       isSub: d.isSub,
       spec: it.override?.spec || (src ? renderSpec(src) : ''),
       method: it.override?.method || d.c.method || '',
+      gageId: d.c.gageId || '',      // a blank sheet prints it in every band
       bands: []
     };
   }).filter(Boolean);
@@ -4349,9 +4311,9 @@ const blankColumns = (cols, labels) =>
   Array.from({ length: cols }, () => Array.from({ length: labels }, () => ''));
 const blankBands = (bands, cols, labels) =>
   Array.from({ length: bands }, () => ({ columns: blankColumns(cols, labels) }));
-const blankRowBands = (bands, cols) =>
+const blankRowBands = (bands, cols, gageId = '') =>
   Array.from({ length: bands }, () => ({
-    gageId: '', values: Array.from({ length: cols }, () => '')
+    gageId, values: Array.from({ length: cols }, () => '')
   }));
 const sheetById = id => sheets.find(s => s.id === id) || null;
 
@@ -4386,7 +4348,9 @@ function newInspection(sheetId) {
       // as Unicode: the frozen row outlives whatever face renders it.
       spec: it.override?.spec || renderSpec(d.c),
       method: it.override?.method || d.c.method || '',
-      bands: blankRowBands(bands, cols)
+      // Pre-filled once, here; the inspector can change it per band, and later
+      // edits to the characteristic never reach a record.
+      bands: blankRowBands(bands, cols, d.c.gageId || '')
     });
   }
   return {
@@ -6249,7 +6213,7 @@ function exportRows(sh) {
   for (const it of sh.items) {
     if (it.type === 'header') {
       rows.push({ rowType: 'header', number: '', isSub: '', spec: '', method: '',
-                  notes: '', headerText: it.text || '', drawing: '', page: '' });
+                  notes: '', headerText: it.text || '', drawing: '', page: '', gageId: '' });
       continue;
     }
     if (!it.include) continue;
@@ -6266,7 +6230,8 @@ function exportRows(sh) {
       notes: d.c.notes || '',
       headerText: '',
       drawing: doc?.label || doc?.file || '',
-      page: String((d.el.pdfPage ?? 0) + 1)
+      page: String((d.el.pdfPage ?? 0) + 1),
+      gageId: d.c.gageId || ''
     });
   }
   return rows;
@@ -6305,7 +6270,9 @@ function sheetColumns(sh) {
     { header: 'Notes',        values: per(x => x.notes) },
     { header: 'HeaderText',   values: per(x => x.headerText) },
     { header: 'DrawingLabel', values: per(x => x.drawing) },
-    { header: 'DrawingPage',  values: per(x => x.page) }
+    { header: 'DrawingPage',  values: per(x => x.page) },
+    // Last, so readers that count columns still find the older ones.
+    { header: 'GageId',       values: per(x => x.gageId) }
   ];
 }
 

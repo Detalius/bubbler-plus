@@ -343,6 +343,7 @@ function sheetPages(sh) {
       isSub: sub !== undefined,
       spec: it.override?.spec || (shown ? S.renderSpec(shown) : ''),
       method: it.override?.method || src.method || '',
+      gageId: src.gageId || '',
       bands: []
     });
   }
