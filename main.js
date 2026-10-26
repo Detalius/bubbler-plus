@@ -451,9 +451,10 @@ ipcMain.handle('print:pdf', async (_event, { html, landscape }) => {
 });
 
 // Prints a PDF the renderer has already produced, through a temp file: a
-// data URL of a multi-megabyte PDF means a huge base64 string. Margins are 'none'
-// for both print paths: sheets fill the page, and a drawing's margin is baked
-// into its bytes, since Chromium's PDF viewer ignores this option.
+// data URL of a multi-megabyte PDF means a huge base64 string. Runs for every
+// print, sheets and drawings alike. Margins are 'none': a sheet's margins are
+// in its own layout and a drawing's are baked into its bytes, since Chromium's
+// PDF viewer ignores this option.
 ipcMain.handle('print:pdfBytes', async (_event, { data, landscape }) => {
   const tmp = path.join(app.getPath('temp'), `bubbler-print-${Date.now()}.pdf`);
   await fs.writeFile(tmp, Buffer.from(data));
@@ -473,26 +474,6 @@ ipcMain.handle('print:pdfBytes', async (_event, { data, landscape }) => {
       try { w.destroy(); } catch {}
       fs.unlink(tmp).catch(() => {});
     }, 1500);
-  }
-});
-
-// Renders a sheet's HTML in a hidden window and opens the system print dialog.
-// Margins 'none', matching print:pdf: the geometry is measured against the
-// whole page.
-ipcMain.handle('print:dialog', async (_event, { html, landscape }) => {
-  const w = new BrowserWindow({ show: false, webPreferences: { offscreen: false } });
-  try {
-    await w.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
-    await new Promise(r => setTimeout(r, 250));
-    return await new Promise(resolve => {
-      w.webContents.print(
-        { silent: false, printBackground: true, landscape: !!landscape,
-          margins: { marginType: 'none' } },
-        (ok, reason) => resolve({ ok, reason })
-      );
-    });
-  } finally {
-    setTimeout(() => { try { w.destroy(); } catch {} }, 500);
   }
 });
 

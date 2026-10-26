@@ -413,8 +413,11 @@ $('libPrint').onclick = async () => {
   if (!activeItem) return;
   const S = sheets();
   try {
-    // buildPage() returns raw DOM, and main prints it in a blank window, so the
-    // sheet has to travel as a document carrying its own print stylesheet.
+    // buildPage() returns raw DOM, and main renders it in a blank window, so the
+    // sheet has to travel as a document carrying its own print stylesheet. It
+    // prints as a PDF, the same way a drawing does: printing the HTML directly
+    // put the page's corner at the printer's printable-area corner, so 100%
+    // scale clipped the right and bottom edges. The form's own margins stand.
     if (activeItem.kind === 'sheet') {
       const sh = activeItem.sheet;
       const pages = sheetPages(sh);
@@ -424,7 +427,9 @@ $('libPrint').onclick = async () => {
       const html = `<!doctype html><html><head><meta charset="utf-8">
         <style>${S.printCss(await S.symbolFontDataUri())}</style></head>
         <body>${holder.innerHTML}</body></html>`;
-      await api().printDialog({ html, landscape: sh.orientation === 'landscape' });
+      const landscape = sh.orientation === 'landscape';
+      const bytes = await api().printPdf({ html, landscape });
+      await api().printPdfBytes({ data: bytes, landscape });
     } else {
       // A drawing is already a PDF. Don't base64 it; a large one overflows the
       // stack.

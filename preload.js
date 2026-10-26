@@ -59,7 +59,6 @@ contextBridge.exposeInMainWorld('api', {
   recentsRemove: file => ipcRenderer.invoke('recents:remove', file),
   recentsClear: () => ipcRenderer.invoke('recents:clear'),
   searchPackages: (q, opts) => ipcRenderer.invoke('index:search', q, opts),
-  printDialog: opts => ipcRenderer.invoke('print:dialog', opts),
   printPdfBytes: opts => ipcRenderer.invoke('print:pdfBytes', opts),
   pickWorkbook: () => ipcRenderer.invoke('xlsx:pick'),
   appendWorkbook: payload => ipcRenderer.invoke('xlsx:append', payload)
