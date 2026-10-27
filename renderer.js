@@ -4,7 +4,7 @@ import METHODS from './assets/methods.json' with { type: 'json' };
 import {
   validateTemplate, checkColumn, headerWidth, bodyWidth, bandCount, paginateRows, fillText,
   canonicalJson, templateHash, packageTemplateFiles, readPackageTemplates, readTemplateRef,
-  readCustom, customNames, isBuiltinField
+  readCustom, customNames, isBuiltinField, printFit
 } from './sheet-template.js';
 import { buildPage as drawPage, printCss } from './sheet-page.js';
 import { pageModel, formWorkbook } from './xlsx-form.js';
@@ -4942,7 +4942,7 @@ function settingsDialog() {
       <div class="row"><label>Printing margins</label>
         <div class="swap" style="gap:6px; align-items:center">
           <input id="cfgMargin" type="number" min="0" max="1" step="0.05" style="flex: 50%">
-          <span class="hint" style="margin:0; flex: 50%">Only applies when printing bubbled drawings.</span>
+          <span class="hint" style="margin:0; flex: 50%">Your printer's unprintable edge. Printed drawings shrink to clear it, and sheets shrink only if they reach into it.</span>
         </div>
       </div>
       <div class="row"><label>Method list</label>
@@ -5403,7 +5403,7 @@ window.BubblerSheets = {
   buildPage, paginate, paginateRows, rowsFromSheet, printCss,
   symbolFontDataUri, templateOf, readPackageTemplates, partFromManifest, renderSpec, toFont, specSource,
   sheetCtx, enablePan, holdCentre, wheelZoom, stampElements, elementsFromManifest, paintElements,
-  toWinAnsi, stampFonts
+  toWinAnsi, stampFonts, printFit
 };
 
 // The rail's two shapes: author (Bubbler, Dimensions, Sheets) or inspect

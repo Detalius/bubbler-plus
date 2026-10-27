@@ -418,7 +418,9 @@ $('libPrint').onclick = async () => {
     // sheet has to travel as a document carrying its own print stylesheet. It
     // prints as a PDF, the same way a drawing does: printing the HTML directly
     // put the page's corner at the printer's printable-area corner, so 100%
-    // scale clipped the right and bottom edges. The form's own margins stand.
+    // scale clipped the right and bottom edges. The form's own margins stand,
+    // except where they sit inside the printer's edge (the built-ins' footer is
+    // 0.13" up): fitToPrinter() shrinks the printed copy just enough.
     if (activeItem.kind === 'sheet') {
       const sh = activeItem.sheet;
       const pages = sheetPages(sh);
@@ -429,7 +431,7 @@ $('libPrint').onclick = async () => {
         <style>${S.printCss(await S.symbolFontDataUri())}</style></head>
         <body>${holder.innerHTML}</body></html>`;
       const landscape = sh.orientation === 'landscape';
-      const bytes = await api().printPdf({ html, landscape });
+      const bytes = await fitToPrinter(await api().printPdf({ html, landscape }), ctx.template);
       await api().printPdfBytes({ data: bytes, landscape });
     } else {
       // A drawing is already a PDF. Don't base64 it; a large one overflows the
@@ -441,6 +443,29 @@ $('libPrint').onclick = async () => {
     setStatus(`Could not print: ${err.message}`);
   }
 };
+
+// The printer's unprintable edge, in inches, from Settings > Printing margins.
+async function printMargin() {
+  let marginIn = 0;
+  try { marginIn = Number((await api().getConfig())?.PRINT_MARGIN_IN ?? 0); } catch {}
+  return Math.max(0, Math.min(1, marginIn || 0));
+}
+
+// Shrinks a sheet's printed PDF so its ink clears the printer's edge. Baked into
+// the bytes like a drawing's margin, since the PDF viewer ignores print margins.
+// The export is untouched: only paper has an unprintable edge.
+async function fitToPrinter(bytes, template) {
+  const fit = sheets().printFit(template, await printMargin());
+  if (!fit) return bytes;
+  const out = await PDFLib.PDFDocument.load(bytes);
+  for (const p of out.getPages()) {
+    const H = p.getHeight() / 72;
+    // printFit() works from the top-left; PDF space starts bottom-left.
+    p.scaleContent(fit.scale, fit.scale);
+    p.translateContent(fit.dx * 72, (H - fit.scale * H - fit.dy) * 72);
+  }
+  return await out.save();
+}
 
 // Annotations are stamped onto a copy of the PDF for printing, exactly like the
 // editor's export.
@@ -460,9 +485,7 @@ async function stampedDrawing(it) {
   // Margins are baked into the BYTES, not asked for at print time, because
   // Chromium's PDF viewer ignores webContents.print()'s margins option. Baked
   // after the stamping, so the annotations shrink with the drawing.
-  let marginIn = 0;
-  try { marginIn = Number((await api().getConfig())?.PRINT_MARGIN_IN ?? 0); } catch {}
-  const m = Math.max(0, Math.min(1, marginIn || 0)) * 72;        // inches -> points
+  const m = (await printMargin()) * 72;                            // inches -> points
   if (m) {
     for (const p of pages) {
       // CAD exports often inset the crop box, and that is what printers show,

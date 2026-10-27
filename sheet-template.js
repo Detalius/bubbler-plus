@@ -59,6 +59,29 @@ export function bandCount(t, rowCount) {
   return Math.max(1, Math.floor((available + 1e-6) / band));
 }
 
+// How to fit a finished page inside a printer's unprintable edge of `margin`
+// inches: a uniform scale and a shift, both in inches, or null when the ink
+// already clears it. The layout itself never changes, so no row moves pages;
+// only the printed copy shrinks, and only as much as this form needs. The ink
+// is the grid plus the footer, whose baseline sits `bottom` above the edge.
+export function printFit(t, margin) {
+  const [W, H] = t.page.size;
+  if (!(margin > 0)) return null;
+  const side = (W - Math.max(headerWidth(t), bodyWidth(t))) / 2;
+  const feet = (t.footer || []).map(f => f.bottom ?? 0);
+  const ink = { x0: side, x1: W - side, y0: t.page.marginTop,
+                y1: H - Math.min(t.page.marginBottom, ...feet) };
+  const clear = ink.x0 >= margin && W - ink.x1 >= margin &&
+                ink.y0 >= margin && H - ink.y1 >= margin;
+  if (clear) return null;
+  const s = Math.min(1, (W - 2 * margin) / (ink.x1 - ink.x0),
+                        (H - 2 * margin) / (ink.y1 - ink.y0));
+  // Centred on the page: the scaled ink then clears every edge equally.
+  return { scale: s,
+           dx: W / 2 - s * (ink.x0 + ink.x1) / 2,
+           dy: H / 2 - s * (ink.y0 + ink.y1) / 2 };
+}
+
 // Splits rows into pages of at most rowsPerPage(t). A characteristic and its
 // sub-dimensions are never split; a banded sheet is always one page.
 export function paginateRows(rows, t, isSub = r => r.isSub) {

@@ -88,8 +88,9 @@ const CONFIG_DEFAULTS = {
   // Directory reads in flight at once. Also sizes the thread pool at startup,
   // so a change takes effect on the next launch.
   CONCURRENCY: 8,
-  // Inches of margin when PRINTING A DRAWING. Sheets never get one: their
-  // geometry is measured against a full page.
+  // The printer's unprintable edge, in inches, for PRINTING. A drawing is shrunk
+  // by it on every side; a sheet only as much as its own ink needs to clear it
+  // (printFit). Sheet layout never sees it: exports and previews are full-page.
   PRINT_MARGIN_IN: 0.25
 };
 let config = { ...CONFIG_DEFAULTS };

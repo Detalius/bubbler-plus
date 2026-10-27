@@ -13,6 +13,40 @@ const ipi = () => clone(builtins.find(t => t.id === 'ipi-landscape'));
 let T;
 test.before(async () => { T = await import('../sheet-template.js'); });
 
+test('printFit: the built-ins shrink just enough to lift the footer off the edge', () => {
+  // Measured from Electron's own PDF of an IPI sheet: the footer's baseline box sits
+  // 0.13" above the bottom edge, inside a typical printer's 0.25" unprintable band.
+  const t = ipi();
+  const fit = T.printFit(t, 0.25);
+  assert.ok(fit, 'a 0.13" footer needs fitting');
+  // Ink runs from the top margin down to the footer: 8.5 - 0.26 - 0.13 = 8.11" tall,
+  // into 8.5 - 0.5 = 8.0" of printable height. Worked by hand, not by the formula.
+  assert.ok(Math.abs(fit.scale - 8.0 / (8.5 - t.page.marginTop - 0.13)) < 1e-9, fit.scale);
+  assert.ok(fit.scale > 0.98 && fit.scale < 0.99, 'about the 98% he found by hand');
+  // After the fit, every edge of the ink clears the margin.
+  const map = (v, d) => fit.scale * v + d;
+  assert.ok(map(t.page.marginTop, fit.dy) >= 0.25 - 1e-9);
+  assert.ok(8.5 - map(8.5 - 0.13, fit.dy) >= 0.25 - 1e-9);
+});
+
+test('printFit: nothing to do when the ink already clears, or with no margin', () => {
+  const t = ipi();
+  assert.equal(T.printFit(t, 0), null);
+  assert.equal(T.printFit(t, 0.1), null, 'a 0.1" edge: the 0.13" footer already clears it');
+  t.footer = [];                       // no footer: the bottom margin (0.5") is the ink edge
+  assert.equal(T.printFit(t, 0.25), null);
+});
+
+test('printFit: a form too close at the side shrinks on that axis', () => {
+  const t = ipi();
+  t.footer = [];
+  const W = t.page.size[0];
+  t.header.columns = t.header.columns.map(c => c * (W - 0.2) / t.header.columns.reduce((a, b) => a + b, 0));
+  const fit = T.printFit(t, 0.25);
+  assert.ok(fit && Math.abs(fit.scale - (W - 0.5) / (W - 0.2)) < 1e-9, fit);
+  assert.ok(Math.abs(fit.dx - (W / 2 - fit.scale * W / 2)) < 1e-9, 'centred across');
+});
+
 test('eight built-ins, all valid', () => {
   assert.equal(builtins.length, 8);
   for (const t of builtins) assert.deepEqual(T.validateTemplate(t), [], t.id);
