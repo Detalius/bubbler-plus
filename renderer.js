@@ -7129,7 +7129,9 @@ if (window.api?.onMenuAction) {
       case 'docinfo': openModal('edit'); break;
       case 'replacedrawing': replaceDrawing().catch(err => notify('Could not replace the drawing', err.message)); break;
       case 'history': historyDialog(); break;
-      case 'settings': settingsDialog(); break;
+      // Re-read first: the Library's printer-edge box writes the config too, and a
+      // stale copy here would put the old value back on Save.
+      case 'settings': loadConfig().then(settingsDialog); break;
       case 'checkupdate': checkForUpdates({ manual: true }); break;
       case 'clear':
         if (!elements.length) break;

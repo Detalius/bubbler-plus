@@ -43,6 +43,7 @@ sheets().wheelZoom?.(document.getElementById('libScroll'), document.getElementBy
 window.BubblerLibrary = {
   show() {
     syncActions();
+    showMargin();
     $('library').hidden = false;
     $('libSearch').focus();
     if (!results.length) runSearch('');
@@ -450,6 +451,20 @@ async function printMargin() {
   try { marginIn = Number((await api().getConfig())?.PRINT_MARGIN_IN ?? 0); } catch {}
   return Math.max(0, Math.min(1, marginIn || 0));
 }
+
+// The same setting, beside Print: it's where someone notices a clipped edge. A
+// build without a config store (the web Library) hides the box.
+async function showMargin() {
+  const box = $('libMargin');
+  const can = !!(api()?.getConfig && api()?.setConfig);
+  box.closest('label').hidden = !can;
+  if (can) box.value = await printMargin();
+}
+$('libMargin').addEventListener('change', async e => {
+  const v = Math.max(0, Math.min(1, parseFloat(e.target.value) || 0));
+  e.target.value = v;
+  try { await api().setConfig({ PRINT_MARGIN_IN: v }); } catch (err) { setStatus(`Could not save: ${err.message}`); }
+});
 
 // Shrinks a sheet's printed PDF so its ink clears the printer's edge. Baked into
 // the bytes like a drawing's margin, since the PDF viewer ignores print margins.
