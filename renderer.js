@@ -6780,7 +6780,9 @@ function showDrawing(on) { $('stack').hidden = !on;   $('empty').hidden = on; }
 function openModal(mode) {
   modalMode = mode;
   docBackup = { ...doc.part };
-  if (mode === 'new') {
+  if (mode === 'new' || mode === 'fromPdf') {
+    // 'fromPdf': the drawing is already loaded, with its part cleared by
+    // loadPdfBytes(); Continue keeps it, Cancel leaves the part blank.
     doc.part = { number: '', revision: '', name: '', customerName: '',
                  customerPartNumber: '', material: '', finish: '' };
     $('mTitle').textContent = 'New Package';
@@ -6956,6 +6958,8 @@ async function loadFile(name, buf, filePath = null) {
     markDirty();
     showApp();
     showDrawing(true);
+    // Same as New: a package starts by saying which part it covers.
+    openModal('fromPdf');
   } catch (err) {
     await notify(`Could not open ${name}`, err.message);
   }
@@ -7031,6 +7035,11 @@ renderDocList();
 async function loadPdfBytes(buf, name) {
   clearRecordMode();
   await releaseDocs();
+  // A new package, so nothing of the last one's identity carries over: an empty
+  // part, or it saves under the previous part number and revision.
+  doc.part = { number: '', revision: '', name: '', customerName: '',
+               customerPartNumber: '', material: '', finish: '' };
+  newerSchema = null;
   packageTemplates = new Map();
   elements = []; nextNumber = 1; uid = 1; clearSel();
   sheets = []; activeSheetId = null;
