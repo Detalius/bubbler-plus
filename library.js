@@ -497,25 +497,33 @@ async function stampedDrawing(it) {
   const fonts = await S.stampFonts(out);
   S.stampElements(pages, S.elementsFromManifest(openPkg.manifest, it.id), fonts);
 
-  // Margins are baked into the BYTES, not asked for at print time, because
-  // Chromium's PDF viewer ignores webContents.print()'s margins option. Baked
-  // after the stamping, so the annotations shrink with the drawing.
-  const m = (await printMargin()) * 72;                            // inches -> points
-  if (m) {
-    for (const p of pages) {
-      // CAD exports often inset the crop box, and that is what printers show,
-      // so centre against it rather than getSize()'s media box.
-      const b = p.getCropBox() || p.getMediaBox();
-      // One scale for both axes, so the drawing keeps its proportions. The long
-      // edges of the sheet get the margin asked for, the short edges get more.
-      const s = Math.min((b.width - 2 * m) / b.width, (b.height - 2 * m) / b.height);
-      if (s <= 0 || s >= 1) continue;                    // margin bigger than the page
-      // scaleContent() scales about the page origin (0,0), so an inset box
-      // drifts by b.x * s and has to be re-centred after scaling.
-      p.scaleContent(s, s);
-      p.translateContent(b.x + (b.width  - b.width  * s) / 2 - b.x * s,
-                         b.y + (b.height - b.height * s) / 2 - b.y * s);
-    }
-  }
+  // Baked after the stamping, so the annotations shrink with the drawing.
+  await bakeDrawingMargin(pages);
   return await out.save();
 }
+
+// Margins are baked into the BYTES, not asked for at print time, because
+// Chromium's PDF viewer ignores webContents.print()'s margins option. Runs on a
+// drawing's pdf-lib pages, here and from the editor's Print.
+async function bakeDrawingMargin(pages) {
+  const m = (await printMargin()) * 72;                            // inches -> points
+  if (!m) return;
+  for (const p of pages) {
+    // CAD exports often inset the crop box, and that is what printers show,
+    // so centre against it rather than getSize()'s media box.
+    const b = p.getCropBox() || p.getMediaBox();
+    // One scale for both axes, so the drawing keeps its proportions. The long
+    // edges of the sheet get the margin asked for, the short edges get more.
+    const s = Math.min((b.width - 2 * m) / b.width, (b.height - 2 * m) / b.height);
+    if (s <= 0 || s >= 1) continue;                    // margin bigger than the page
+    // scaleContent() scales about the page origin (0,0), so an inset box
+    // drifts by b.x * s and has to be re-centred after scaling.
+    p.scaleContent(s, s);
+    p.translateContent(b.x + (b.width  - b.width  * s) / 2 - b.x * s,
+                       b.y + (b.height - b.height * s) / 2 - b.y * s);
+  }
+}
+
+// The printer's edge handling, for the editor's Print buttons: one place
+// decides how a sheet or drawing meets paper.
+window.BubblerPrint = { printMargin, fitToPrinter, bakeDrawingMargin };

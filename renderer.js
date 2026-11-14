@@ -347,7 +347,7 @@ function currentArea() {
     }
     case 'inspect': {
       const ins = activeInsp();
-      return ins ? `Inspection \u201c${ins.sheetName || 'record'}\u201d` : 'Inspections';
+      return ins ? `Inspection \u201c${inspName(ins, 'record')}\u201d` : 'Inspections';
     }
     default: return 'Bubbles \u0026 drawings';
   }
@@ -1041,6 +1041,7 @@ async function buildManifest() {
     // changes to its sheet and characteristics.
     inspections: inspections.map(ins => ({
       id: ins.id,
+      ...(ins.name ? { name: ins.name } : {}),      // absent until renamed
       sheetId: ins.sheetId,
       sheetName: ins.sheetName || '',
       stage: ins.stage || 'in-process',
@@ -1171,6 +1172,7 @@ function applyManifest(m) {
 
   inspections = (m.inspections || []).map(ins => ({
     id: ins.id,
+    name: typeof ins.name === 'string' ? ins.name : '',
     sheetId: ins.sheetId,
     sheetName: ins.sheetName || '',
     stage: ins.stage || 'in-process',
@@ -2796,6 +2798,7 @@ function dimRows(el) {
     tr.appendChild(actionCell('\u2212', 'Remove this sub-characteristic', () => {
       pushHistory();
       c.subs.splice(i, 1);
+      dropSubFromSheets(el, i);
       markDirty();
       renderDimTable();
     }));
@@ -3184,7 +3187,7 @@ function moveRow(input, dir) {
   if (line && input.dataset.col) {
     let row = dir > 0 ? line.nextElementSibling : line.previousElementSibling;
     while (row) {
-      const target = row.querySelector(`input[data-col="${input.dataset.col}"]:not([disabled])`);
+      const target = row.querySelector(`:is(input, textarea)[data-col="${input.dataset.col}"]:not([disabled])`);
       if (target) { target.focus(); target.select(); return true; }
       row = dir > 0 ? row.nextElementSibling : row.previousElementSibling;
     }
@@ -3500,6 +3503,22 @@ function reconcile(sheet) {
     }
   }
   normalizeSubs(sheet);
+}
+
+// A sub's ref is its index (refOf), so removing sub i renumbers every later sub
+// of that bubble. Every sheet follows at once: its row for sub i goes, and rows
+// for i+1.. step down with their include and override. Left to reconcile(), a
+// sheet not on screen kept the dead row and slid it onto the next sub.
+function dropSubFromSheets(el, i) {
+  const prefix = `${el.id}#`;
+  for (const sh of sheets) {
+    sh.items = sh.items.filter(it => it.ref !== refOf(el, i));
+    for (const it of sh.items) {
+      if (it.type !== 'characteristic' || !String(it.ref).startsWith(prefix)) continue;
+      const j = Number(it.ref.slice(prefix.length));
+      if (j > i) it.ref = refOf(el, j - 1);
+    }
+  }
 }
 
 // Puts every sub directly beneath its parent, in source order, and excludes it
@@ -4242,36 +4261,88 @@ function sheetStem(sh) {
     .filter(Boolean).join('_').replace(/[^\w.-]+/g, '_');
 }
 
-// Bytes only; the caller decides where they land. Runs from the Sheets tab's
-// Export PDF button and from File > Export….
-async function sheetPdfBytes(sh) {
+// Pages as a standalone document carrying its own print stylesheet: main
+// renders it in a blank window.
+async function pagesHtml(holder) {
+  return `<!doctype html><html><head><meta charset="utf-8">
+    <style>${printCss(await symbolFontDataUri())}</style></head>
+    <body>${holder.innerHTML}</body></html>`;
+}
+
+async function sheetHtml(sh) {
   const pages = paginate(sh);
   const ctx = sheetCtx(sh, pages.reduce((n, p) => n + p.length, 0));
   const holder = document.createElement('div');
   pages.forEach((items, i) => holder.appendChild(
     buildPage(ctx, rowsFromSheet(sh, items), i + 1, pages.length)));
-
-  const html = `<!doctype html><html><head><meta charset="utf-8">
-    <style>${printCss(await symbolFontDataUri())}</style></head>
-    <body>${holder.innerHTML}</body></html>`;
-
-  return window.api.printPdf({ html, landscape: isLandscape(templateOf(sh)) });
+  return pagesHtml(holder);
 }
 
-// The Sheets tab's Export PDF button.
-async function exportSheetPdf() {
+// Bytes only; the caller decides where they land. Runs from File > Export….
+async function sheetPdfBytes(sh) {
+  return window.api.printPdf({ html: await sheetHtml(sh), landscape: isLandscape(templateOf(sh)) });
+}
+
+// ---------------------------------------------------------------------------
+// Print
+//
+// Paper, not files: the Sheets and Inspect tabs' Print buttons and File > Print.
+// A form prints as a PDF the same way the Library prints one (printing the HTML
+// directly clipped the right and bottom edges at 100%), shrunk just enough to
+// clear the printer's edge from Settings. Exports are untouched.
+// ---------------------------------------------------------------------------
+async function printForm(html, template) {
+  const P = window.BubblerPrint;
+  if (!window.api?.printPdf || !window.api?.printPdfBytes || !P) {
+    await notify('Printing unavailable', 'This build cannot reach the print service.');
+    return;
+  }
+  const landscape = isLandscape(template);
+  const bytes = await P.fitToPrinter(await window.api.printPdf({ html, landscape }), template);
+  await window.api.printPdfBytes({ data: bytes, landscape });
+}
+
+async function printSheet() {
   const sh = activeSheet();
   if (!sh) return;
-  if (!window.api?.printPdf) {
+  try { await printForm(await sheetHtml(sh), templateOf(sh)); }
+  catch (err) { await notify('Could not print sheet', err.message); }
+}
+
+async function printInsp() {
+  const ins = activeInsp();
+  if (!ins) return;
+  try { await printForm(await inspHtml(ins), templateOf(ins)); }
+  catch (err) { await notify('Could not print inspection', err.message); }
+}
+
+// The bubbled drawing on screen, stamped the way File > Export… stamps it.
+async function printDrawing() {
+  const d = docs.find(x => x.id === activeDocId);
+  if (!d) { await notify('No drawing to print', 'Add a drawing to this package first.'); return; }
+  const P = window.BubblerPrint;
+  if (!window.api?.printPdfBytes || !P) {
     await notify('Printing unavailable', 'This build cannot reach the print service.');
     return;
   }
   try {
-    const bytes = await sheetPdfBytes(sh);
-    await saveBytes(bytes, `${sheetStem(sh)}.pdf`, 'application/pdf',
-      [{ name: 'PDF', extensions: ['pdf'] }]);
+    const one = await PDFDocument.load(d.bytes.slice(0));
+    const pages = one.getPages();
+    stampElements(pages, elements.filter(e => e.documentId === d.id), await stampFonts(one));
+    await P.bakeDrawingMargin(pages);
+    await window.api.printPdfBytes({ data: await one.save(), landscape: false });
   } catch (err) {
-    await notify('Could not export sheet', err.message);
+    await notify('Could not print drawing', err.message);
+  }
+}
+
+// File > Print: whatever the current tab shows.
+function printCurrent() {
+  switch (currentPage) {
+    case 'sheets':  return printSheet();
+    case 'inspect': return printInsp();
+    case 'bubbler': return printDrawing();
+    default: notify('Nothing to print here', 'Print from the Bubbler, Sheets or Inspect tab.');
   }
 }
 
@@ -4282,9 +4353,13 @@ async function exportSheetPdf() {
 // SNAPSHOT taken when the sheet is chosen: its rows keep their rendered text and
 // never re-read the sheet or the characteristics.
 //
-//   inspection { id, sheetId, sheetName, stage, orientation, author, editDate,
-//                jobNumber, machine, createdUtc, bandCount, columnCount,
-//                bands[], rows[] }
+//   inspection { id, name, sheetId, sheetName, stage, orientation, author,
+//                editDate, jobNumber, machine, createdUtc, bandCount,
+//                columnCount, bands[], rows[] }
+//   name       the record's own label, '' until renamed; shown in its place is
+//              sheetName, which stays the sheet it was made from. A label, not
+//              a result: it is outside the record hash, so renaming never
+//              makes a record and its package disagree.
 //   rows[]     { type:'header', text }
 //            | { type:'characteristic', ref, number, isSub, spec, method, bands[] }
 // ---------------------------------------------------------------------------
@@ -4296,6 +4371,7 @@ let inspDocId = null, inspPageIdx = 0, inspScale = 0.7;
 let inspBusy = false, inspQueued = false, inspHold = null;
 
 const activeInsp = () => inspections.find(i => i.id === activeInspId) || null;
+const inspName = (ins, blank = 'Inspection') => ins?.name || ins?.sheetName || blank;
 
 // A form's entry columns and the labels heading each one, from its template.
 const columnCountFor = x => checkColumn(templateOf(x))?.repeat ?? 0;
@@ -4358,6 +4434,7 @@ function newInspection(sheetId) {
     bandCount: bands,
     columnCount: cols,
     bands: blankBands(bands, cols, labels.length),
+    name: '',
     sheetId,
     sheetName: sh.name,
     stage: sh.stage,
@@ -4393,7 +4470,7 @@ function renderInspCards() {
     card.className = 'sh-card' + (ins.id === activeInspId ? ' on' : '');
     const nm = document.createElement('div');
     nm.className = 'nm';
-    nm.textContent = ins.sheetName || 'Inspection';
+    nm.textContent = inspName(ins);
     const meta = document.createElement('div');
     meta.className = 'meta';
     meta.textContent = `${when || 'no date'} \u00b7 ${who || 'unassigned'}`;
@@ -4406,7 +4483,7 @@ function renderInspCards() {
       if (!await confirmAction('Delete this inspection?',
             'The recorded results are removed. The sheet is untouched.', 'Delete')) return;
       pushHistory();
-      noteDeleted(`Inspection \u201c${ins.sheetName || 'record'}\u201d`);
+      noteDeleted(`Inspection \u201c${inspName(ins, 'record')}\u201d`);
       inspections = inspections.filter(x => x.id !== ins.id);
       if (activeInspId === ins.id) activeInspId = inspections[0]?.id || null;
       markDirty(); renderInspect();
@@ -4435,6 +4512,10 @@ function renderInspRows() {
   $('inspFetch').hidden = !recordMode;
   $('inspOpenPkg').hidden = !recordMode;
 
+  // Blank shows the sheet's name, which is what it's called until renamed.
+  $('inspName').value = ins.name || '';
+  $('inspName').placeholder = ins.sheetName || 'Inspection';
+
   // No repaint on edit: the drawing pane beside these doesn't show them.
   buildFields($('inspFields'), templateOf(ins), 'record', activeInsp);
   $('inspSrc').textContent =
@@ -4452,6 +4533,7 @@ function renderInspRows() {
   const body = templateOf(ins).body.columns;
   const gageCol = body.find(c => c.bind === 'gage');
   const specHead = body.find(c => (c.bind === 'number' || c.bind === 'spec') && c.heading)?.heading;
+  const methHead = body.find(c => c.bind === 'method' && c.heading)?.heading;
   $('inspRows').closest('.sh-editor')?.style.setProperty('--ins-cols', cols);
   host.style.setProperty('--ins-cols', cols);
 
@@ -4471,6 +4553,7 @@ function renderInspRows() {
       row.appendChild(el('span', 'num'));
       row.appendChild(el('span', 'grp-bar'));
       row.appendChild(el('span', 'spec'));
+      row.appendChild(el('span', 'method'));
       row.appendChild(el('span', 'lbl', lab));
       const cells = document.createElement('div');
       cells.className = 'ins-cells';
@@ -4487,6 +4570,7 @@ function renderInspRows() {
     ch.appendChild(el('span', 'num'));
     ch.appendChild(el('span', 'grp-bar'));
     ch.appendChild(el('span', 'spec', specHead || 'Dimension'));
+    ch.appendChild(el('span', 'method', methHead || 'Method'));
     ch.appendChild(el('span', 'lbl', gageCol ? gageCol.heading || 'Gage ID' : ''));
     ch.appendChild(el('span', 'cells-label', 'Entries'));
     host.appendChild(ch);
@@ -4511,7 +4595,8 @@ function renderInspRows() {
       line.appendChild(el('span', 'grp-bar' + (inGroup ? ' on' : '')));
 
       // Shared across bands but editable in each; edits mirror live.
-      line.appendChild(sharedSpecInput(row, i));
+      line.appendChild(sharedInput(row, i, 'spec'));
+      line.appendChild(sharedInput(row, i, 'method'));
 
       line.appendChild(gageCol ? colInput(rb, 'gageId', 'gage', 'gage', 'gage') : el('span', 'lbl'));
 
@@ -4523,6 +4608,11 @@ function renderInspRows() {
       host.appendChild(line);
     });
   }
+  // A lone entry column gets room for a reading; several share it narrower.
+  host.style.setProperty('--ins-cell-w', cols === 1 ? '120px' : '72px');
+  fitInspColumns();
+  // A hidden pane has no layout to grow the wrapped dimensions against yet.
+  requestAnimationFrame(fitInspColumns);
 }
 
 function el(tag, cls, text) {
@@ -4532,27 +4622,66 @@ function el(tag, cls, text) {
   return n;
 }
 
-// The same field shown once per band. Edits write to the row and mirror into the
-// other bands' copies, so several inputs can share one value without drifting.
-function sharedSpecInput(row, rowIndex) {
-  const i = document.createElement('input');
-  i.type = 'text';
-  i.className = 'symtext spec';
-  i.dataset.specRow = String(rowIndex);
-  i.dataset.col = 'spec';
-  i.value = toFont(row.spec || '');
-  i.placeholder = 'dimension';
-  const hk = `spec${rowIndex}`;      // shared: all bands of a row are one edit
+// The same field shown once per band: the dimension or the method, each an
+// override of what the sheet gave the row. Edits write to the row and mirror
+// into the other bands' copies, so several inputs share one value without
+// drifting. The dimension is a textarea so a long one wraps at the column's cap
+// (Enter still walks the column; guardKeys() takes it before a newline can).
+function sharedInput(row, rowIndex, key) {
+  const wraps = key === 'spec';
+  const i = document.createElement(wraps ? 'textarea' : 'input');
+  if (wraps) i.rows = 1; else i.type = 'text';
+  i.className = `symtext ${key}`;
+  i.dataset.share = `${key}${rowIndex}`;
+  i.dataset.col = key;
+  i.value = toFont(row[key] || '');
+  i.placeholder = key === 'spec' ? 'dimension' : 'method';
+  if (key === 'method' && METHOD_LIST.length) attachSuggest(i, METHOD_LIST);
+  const hk = `${key}${rowIndex}`;    // shared: all bands of a row are one edit
   i.oninput = () => {
     historyBurst(hk);
-    row.spec = toUni(i.value);
-    document.querySelectorAll(`#inspRows input[data-spec-row="${rowIndex}"]`)
+    row[key] = toUni(i.value);
+    document.querySelectorAll(`#inspRows [data-share="${hk}"]`)
       .forEach(other => { if (other !== i) other.value = i.value; });
     markDirty();
+    fitInspColumns();
   };
   guardKeys(i);
   trackFocus(i);
   return i;
+}
+
+// Layout A (11-13): the dimension and method columns are as wide as their
+// longest entry, the dimension capped so a long one wraps, then gage and the
+// entries right behind them; spare width stays at the right. Measured in the
+// fields' own font, so the symbol glyphs count at their real width.
+const INS_SPEC = { min: 110, cap: 260 };
+const INS_METH = { min: 80, cap: 170 };
+let insMeasure = null;
+function textWidth(text, font) {
+  insMeasure = insMeasure || document.createElement('canvas').getContext('2d');
+  insMeasure.font = font;
+  return insMeasure.measureText(text).width;
+}
+function fitInspColumns() {
+  const host = $('inspRows');
+  const widest = (sel, fallback, { min, cap }) => {
+    const fields = [...host.querySelectorAll(sel)];
+    if (!fields.length) return fallback;
+    const cs = getComputedStyle(fields[0]);
+    // The field's own padding and border, so the text never touches its edge.
+    const chrome = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight) +
+                   parseFloat(cs.borderLeftWidth) + parseFloat(cs.borderRightWidth) + 2;
+    const w = Math.max(...fields.map(f => textWidth(f.value || f.placeholder, cs.font)));
+    return Math.round(Math.min(cap, Math.max(min, w + chrome)));
+  };
+  host.style.setProperty('--ins-spec-w', `${widest('textarea.spec', INS_SPEC.min, INS_SPEC)}px`);
+  host.style.setProperty('--ins-meth-w', `${widest('input.method', INS_METH.min, INS_METH)}px`);
+  // Then each wrapped dimension grows to its text, after the width settles.
+  for (const t of host.querySelectorAll('textarea.spec')) {
+    t.style.height = 'auto';
+    t.style.height = `${t.scrollHeight + 2}px`;
+  }
 }
 
 // One cell of a string array — used for both the head labels and the results.
@@ -4788,7 +4917,8 @@ async function buildRecord(ins) {
     })),
     // Compared against the package's copy to tell whether they still match.
     recordHash: await hashInspection(ins),
-    inspection: inspectionCore(ins),
+    // The name rides beside the hashed core, never in it: see `name` above.
+    inspection: { ...inspectionCore(ins), ...(ins.name ? { name: ins.name } : {}) },
     // The form it was filled on, so it reprints the same without its package.
     template: templateOf(ins)
   };
@@ -4865,6 +4995,7 @@ async function loadRecord(rec) {
   const ins = rec.inspection || {};
   inspections = [{
     id: ins.id || `insp_${uid++}`,
+    name: typeof ins.name === 'string' ? ins.name : '',
     sheetId: ins.sheetId || null,
     sheetName: ins.sheetName || 'Inspection',
     stage: ins.stage || 'in-process',
@@ -5621,42 +5752,23 @@ $('inspFetch').onclick = () => fetchBubblePrint();
 $('inspOpenPkg').onclick = () => openSourcePackage();
 
 function inspStem(ins) {
-  return [doc.part.number || 'part', ins.sheetName,
+  return [doc.part.number || 'part', inspName(ins, ''),
           ((ins.bands?.[0]?.columns || [])[0] || [])[0]]
     .filter(Boolean).join('_').replace(/[^\w.-]+/g, '_');
 }
 
-// Bytes only; the caller decides where they land. Runs from the Inspect tab's
-// Export PDF button and from File > Export….
-async function inspPdfBytes(ins) {
+async function inspHtml(ins) {
   const pages = paginateRows(ins.rows, templateOf(ins));
   const holder = document.createElement('div');
   pages.forEach((rows, i) =>
     holder.appendChild(buildPage(inspCtx(ins), rows, i + 1, pages.length)));
-
-  const html = `<!doctype html><html><head><meta charset="utf-8">
-    <style>${printCss(await symbolFontDataUri())}</style></head>
-    <body>${holder.innerHTML}</body></html>`;
-
-  const bytes = await window.api.printPdf({ html, landscape: isLandscape(templateOf(ins)) });
-  return attachRecord(bytes, ins);           // the file carries its own source
+  return pagesHtml(holder);
 }
 
-// The Inspect tab's Export PDF button.
-async function exportInspPdf() {
-  const ins = activeInsp();
-  if (!ins) return;
-  if (!window.api?.printPdf) {
-    await notify('Printing unavailable', 'This build cannot reach the print service.');
-    return;
-  }
-  try {
-    const bytes = await inspPdfBytes(ins);
-    await saveBytes(bytes, `${inspStem(ins)}.pdf`, 'application/pdf',
-      [{ name: 'PDF', extensions: ['pdf'] }]);
-  } catch (err) {
-    await notify('Could not export inspection', err.message);
-  }
+// Bytes only; the caller decides where they land. Runs from File > Export….
+async function inspPdfBytes(ins) {
+  const bytes = await window.api.printPdf({ html: await inspHtml(ins), landscape: isLandscape(templateOf(ins)) });
+  return attachRecord(bytes, ins);           // the file carries its own source
 }
 
 $('inspAdd').onclick = () => {
@@ -5669,13 +5781,22 @@ $('inspAdd').onclick = () => {
       const ins = newInspection(item[0]);
       pushHistory();
       inspections.push(ins);
-      noteCreated(`Inspection \u201c${ins.sheetName || 'record'}\u201d`);
+      noteCreated(`Inspection \u201c${inspName(ins, 'record')}\u201d`);
       activeInspId = ins.id;
       markDirty();
       renderInspect();
     });
 };
-$('inspPrint').onclick = () => exportInspPdf();
+$('inspPrint').onclick = () => printInsp();
+// A rename is one undo step per burst of typing, like any other field.
+$('inspName').oninput = e => {
+  const ins = activeInsp();
+  if (!ins) return;
+  historyBurst(`inspName:${ins.id}`);
+  ins.name = e.target.value.trim() ? e.target.value : '';
+  markDirty();
+  renderInspCards();
+};
 $('inspDoc').onchange = e => { inspDocId = e.target.value; inspPageIdx = 0; renderInspDrawing(); };
 $('inspBack').onclick = () => { if (inspPageIdx > 0) { inspPageIdx--; renderInspDrawing(); } };
 $('inspFwd').onclick = () => {
@@ -5767,7 +5888,7 @@ function duplicateSheet(src) {
   renderSheets();
 }
 
-$('shPrint').onclick = () => exportSheetPdf();
+$('shPrint').onclick = () => printSheet();
 $('shZoom').oninput = e => {
   const hold = holdCentre($('shPrevScroll'), $('shPaper'));
   shZoom = +e.target.value / 100;
@@ -6382,7 +6503,7 @@ async function exportSheetsPdf() {
 async function exportRecordsPdf() {
   const chosen = await pickMany({
     items: inspections,
-    label: ins => `${ins.sheetName || 'Record'}  —  ${ins.inspector || 'no inspector'}`
+    label: ins => `${inspName(ins, 'Record')}  —  ${ins.inspector || 'no inspector'}`
                 + `, ${(ins.createdUtc || '').slice(0, 10) || 'undated'}`,
     title: 'Export filled-in records',
     note: 'One PDF per record, each carrying its own source, written into a '
@@ -6422,7 +6543,7 @@ async function sheetXlsxBytes(sh) {
   return formXlsxBytes(ctx, pages.map(items => rowsFromSheet(sh, items)), sh.name);
 }
 async function inspXlsxBytes(ins) {
-  return formXlsxBytes(inspCtx(ins), paginateRows(ins.rows, templateOf(ins)), ins.sheetName || 'Record');
+  return formXlsxBytes(inspCtx(ins), paginateRows(ins.rows, templateOf(ins)), inspName(ins, 'Record'));
 }
 
 async function exportSheetsXlsx() {
@@ -6446,7 +6567,7 @@ async function exportSheetsXlsx() {
 async function exportRecordsXlsx() {
   const chosen = await pickMany({
     items: inspections,
-    label: ins => `${ins.sheetName || 'Record'}  \u2014  ${ins.inspector || 'no inspector'}`
+    label: ins => `${inspName(ins, 'Record')}  \u2014  ${ins.inspector || 'no inspector'}`
                 + `, ${(ins.createdUtc || '').slice(0, 10) || 'undated'}`,
     title: 'Export filled-in records to Excel',
     note: 'One workbook per record, laid out exactly like the printed form with '
@@ -7131,6 +7252,7 @@ if (window.api?.onMenuAction) {
       case 'save':    saveInsp().catch(err => notify('Could not save', err.message)); break;
       case 'saveas':  saveInsp({ saveAs: true }).catch(err => notify('Could not save', err.message)); break;
       case 'export':  exportDialog(); break;
+      case 'print':   printCurrent(); break;
       // From the menu, or an accelerator nothing in the page handled: with a
       // field focused, it means the field.
       case 'undo':    textField(document.activeElement) ? document.execCommand('undo') : undo(); break;

@@ -1616,6 +1616,7 @@ function buildMenu() {
         { label: 'Save', accelerator: 'CmdOrCtrl+S', click: () => send('save') },
         { label: 'Save As…', accelerator: 'CmdOrCtrl+Shift+S', click: () => send('saveas') },
         { label: 'Export\u2026', accelerator: 'CmdOrCtrl+E', click: () => send('export') },
+        { label: 'Print\u2026', accelerator: 'CmdOrCtrl+P', click: () => send('print') },
         { type: 'separator' },
         isMac ? { role: 'close' } : { role: 'quit' }
       ]
