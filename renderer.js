@@ -4278,9 +4278,20 @@ async function sheetHtml(sh) {
   return pagesHtml(holder);
 }
 
+// An exported form gets the same fit as a printed one (11-17). Exports were
+// left untouched in 0.2.6 as "only paper has an unprintable edge", but an
+// export ends up as paper too, printed from a browser at Actual size, and then
+// the built-ins' footer (0.13" up) fell into the printer's edge. With no edge
+// set in Settings, the bytes pass through as rendered.
+async function fitExport(bytes, template) {
+  const P = window.BubblerPrint;
+  return P ? P.fitToPrinter(bytes, template) : bytes;
+}
+
 // Bytes only; the caller decides where they land. Runs from File > Export….
 async function sheetPdfBytes(sh) {
-  return window.api.printPdf({ html: await sheetHtml(sh), landscape: isLandscape(templateOf(sh)) });
+  const bytes = await window.api.printPdf({ html: await sheetHtml(sh), landscape: isLandscape(templateOf(sh)) });
+  return fitExport(bytes, templateOf(sh));
 }
 
 // ---------------------------------------------------------------------------
@@ -5768,7 +5779,8 @@ async function inspHtml(ins) {
 // Bytes only; the caller decides where they land. Runs from File > Export….
 async function inspPdfBytes(ins) {
   const bytes = await window.api.printPdf({ html: await inspHtml(ins), landscape: isLandscape(templateOf(ins)) });
-  return attachRecord(bytes, ins);           // the file carries its own source
+  // Fitted first, then the record attached, so the fit can't drop it.
+  return attachRecord(await fitExport(bytes, templateOf(ins)), ins);   // the file carries its own source
 }
 
 $('inspAdd').onclick = () => {

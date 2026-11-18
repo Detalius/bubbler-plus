@@ -468,7 +468,8 @@ $('libMargin').addEventListener('change', async e => {
 
 // Shrinks a sheet's printed PDF so its ink clears the printer's edge. Baked into
 // the bytes like a drawing's margin, since the PDF viewer ignores print margins.
-// The export is untouched: only paper has an unprintable edge.
+// Since 11-17 exported forms get it too (fitExport() in renderer.js): an export
+// ends up printed from a browser, and paper has an unprintable edge.
 async function fitToPrinter(bytes, template) {
   const fit = sheets().printFit(template, await printMargin());
   if (!fit) return bytes;
