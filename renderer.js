@@ -336,6 +336,11 @@ if (window.api?.identity) {
 let pendingEdits = { areas: new Set(), created: [], deleted: [] };
 const resetPendingEdits = () => { pendingEdits = { areas: new Set(), created: [], deleted: [] }; };
 let currentPage = 'bubbler';
+// Inspect's preview view and record zoom (renderInspPreview()); up here because
+// markDirty() reads them, and it can run before the Inspect code is reached.
+let inspView = 'drawing';
+let inspPaperZoom = 0.6;
+let inspRecordTimer = null;
 
 // Names the area an edit is logged under, from the rail page it was made on.
 function currentArea() {
@@ -360,6 +365,7 @@ const noteDeleted = what => { pendingEdits.deleted.push(what); markDirty(); };
 // recovery write. Runs after every change to package contents.
 function markDirty(area) {
   pendingEdits.areas.add(area || currentArea());
+  schedInspRecord();
   if (!dirty) {
     dirty = true;
     updateTitle();
@@ -4527,7 +4533,7 @@ function renderInspRows() {
   $('inspName').value = ins.name || '';
   $('inspName').placeholder = ins.sheetName || 'Inspection';
 
-  // No repaint on edit: the drawing pane beside these doesn't show them.
+  // No repaint here on edit: the Record view repaints itself through markDirty().
   buildFields($('inspFields'), templateOf(ins), 'record', activeInsp);
   $('inspSrc').textContent =
     `from \u201c${ins.sheetName}\u201d \u00b7 ${ins.orientation} \u00b7 frozen ${(ins.createdUtc || '').slice(0, 10)}` +
@@ -4794,11 +4800,79 @@ const inspCtx = ins => ({
   }
 });
 
-// Runs from openInspDrawing(), from Inspect's drawing and page controls, and
+// ---- Inspect's preview: the bubbled drawing, or the record as it prints ----
+// (11-13 list, built 11-17.) One pane, two views, one zoom slider: each view
+// keeps its own zoom, and the slider's range follows the view.
+// (inspView, inspPaperZoom and inspRecordTimer live beside currentPage: markDirty() reads them.)
+const INSP_ZOOM = { drawing: { min: 25, max: 300 }, record: { min: 30, max: 150 } };
+
+function setInspView(view) {
+  inspView = view === 'record' ? 'record' : 'drawing';
+  renderInspPreview();
+}
+
+// Shows one view's parts and hides the other's, then paints the one showing.
+function renderInspPreview() {
+  const rec = inspView === 'record';
+  for (const b of document.querySelectorAll('#inspViewSw button')) {
+    b.classList.toggle('on', b.dataset.view === inspView);
+  }
+  for (const n of document.querySelectorAll('#page-inspect .v-drawing')) n.hidden = rec;
+  for (const n of document.querySelectorAll('#page-inspect .v-record')) n.hidden = !rec;
+  $('inspPaper').hidden = !rec;
+  if (rec) { $('inspCanvas').hidden = true; $('inspPrevEmpty').hidden = true; }
+  const z = $('inspZoom'), range = INSP_ZOOM[inspView];
+  z.min = range.min; z.max = range.max;
+  const pct = Math.round((rec ? inspPaperZoom : inspScale) * 100);
+  z.value = pct;
+  $('inspZoomPct').textContent = `${pct}%`;
+  return rec ? renderInspRecord() : renderInspDrawing();
+}
+
+// The active record, built by the same buildPage() as its print and export.
+function renderInspRecord() {
+  if (!previewOn('inspPrevToggle') || inspView !== 'record') return;
+  const host = $('inspPaper');
+  host.innerHTML = '';
+  host.style.zoom = inspPaperZoom;
+  const ins = activeInsp();
+  if (!ins) {
+    $('inspBubbles').textContent = '—';
+    $('inspPrevInfo').textContent = 'Select or create an inspection.';
+    return;
+  }
+  const t = templateOf(ins);
+  const pages = paginateRows(ins.rows, t);
+  const ctx = inspCtx(ins);
+  pages.forEach((rows, i) => {
+    const wrap = document.createElement('div');
+    wrap.className = 'page-wrap';
+    wrap.appendChild(el('div', 'page-tag', `Page ${i + 1} of ${pages.length}`));
+    wrap.appendChild(buildPage(ctx, rows, i + 1, pages.length));
+    host.appendChild(wrap);
+  });
+  $('inspBubbles').textContent = `${pages.length} page${pages.length === 1 ? '' : 's'}`;
+  const n = ins.rows.filter(r => r.type !== 'header').length;
+  $('inspPrevInfo').textContent = `${inspName(ins)} · ${ins.orientation} · ${n} row${n === 1 ? '' : 's'}`;
+}
+
+// Edits to a record repaint its print preview, coalesced: a burst of typing is
+// one rebuild. Runs from markDirty(), so every kind of edit is covered.
+function schedInspRecord() {
+  if (currentPage !== 'inspect' || inspView !== 'record') return;
+  clearTimeout(inspRecordTimer);
+  inspRecordTimer = setTimeout(() => {
+    const hold = holdCentre($('inspPrevScroll'), $('inspPaper'));
+    renderInspRecord();
+    hold();
+  }, 200);
+}
+
+// Runs from renderInspPreview(), from Inspect's drawing and page controls, and
 // when the preview is toggled on.
 async function renderInspDrawing() {
   // A hidden pane is repainted by the toggle on the way back.
-  if (!previewOn('inspPrevToggle')) return;
+  if (!previewOn('inspPrevToggle') || inspView !== 'drawing') return;
   const canvas = $('inspCanvas');
   const d = docs.find(x => x.id === inspDocId);
   // A record carries no drawing until Fetch, so its empty pane says so.
@@ -4852,7 +4926,7 @@ function openInspDrawing() {
     inspPageIdx = 0;
   }
   syncInspDrawingControls();
-  renderInspDrawing();
+  renderInspPreview();
 }
 
 function renderInspect() {
@@ -5816,11 +5890,21 @@ $('inspFwd').onclick = () => {
   if (d && inspPageIdx < d.numPages - 1) { inspPageIdx++; renderInspDrawing(); }
 };
 $('inspZoom').oninput = e => {
+  $('inspZoomPct').textContent = `${e.target.value}%`;
+  if (inspView === 'record') {
+    const hold = holdCentre($('inspPrevScroll'), $('inspPaper'));
+    inspPaperZoom = +e.target.value / 100;
+    $('inspPaper').style.zoom = inspPaperZoom;
+    hold();
+    return;
+  }
   inspHold = inspHold || holdCentre($('inspPrevScroll'), $('inspCanvas'));
   inspScale = parseInt(e.target.value, 10) / 100;
-  $('inspZoomPct').textContent = `${e.target.value}%`;
   renderInspDrawing();
 };
+for (const b of document.querySelectorAll('#inspViewSw button')) {
+  b.onclick = () => setInspView(b.dataset.view);
+}
 
 // ---------------------------------------------------------------------------
 // Sheets page wiring

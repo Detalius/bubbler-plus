@@ -605,6 +605,14 @@
   .prev-bar #inspZoom { width: 100px; accent-color: var(--accent); cursor: pointer; }
   .prev-bar #inspZoomPct { color: var(--ink-dim); font-family: ui-monospace, monospace;
                            font-size: 11px; min-width: 36px; text-align: right; }
+  /* Inspect's preview switch: two halves of one control, like a toggle. */
+  .view-sw { display: flex; flex: none; border: 1px solid var(--edge); border-radius: 5px; overflow: hidden; }
+  .view-sw button { border: none; border-radius: 0; background: transparent; color: var(--ink-dim);
+                    padding: 3px 10px; font-size: 12px; }
+  .view-sw button + button { border-left: 1px solid var(--edge); }
+  .view-sw button:hover { color: var(--ink); }
+  .view-sw button.on { background: var(--accent); color: #fff; }
+  #inspPaper { width: max-content; margin: 0 auto; }
   #inspCanvas { display: block; width: fit-content; margin: 0 auto;
                 box-shadow: 0 1px 10px rgba(0,0,0,.5); }
 
@@ -1104,18 +1112,28 @@
           <div id="inspRows"></div>
         </div>
 
-        <!-- The bubbled drawing, not the sheet: what to measure. -->
+        <!-- Two views: the bubbled drawing (what to measure) and the record as it
+             prints. renderInspPreview() shows one and hides the other's parts. -->
         <div class="sh-preview">
-          <div class="pane-h"><h2>Bubbled drawing</h2><span class="pill" id="inspBubbles">—</span></div>
+          <div class="pane-h">
+            <div class="view-sw" id="inspViewSw">
+              <button data-view="drawing" class="on" title="The bubbled drawing: what to measure">Bubbled drawing</button>
+              <button data-view="record" title="This record as it prints">Record</button>
+            </div>
+            <span class="grow"></span>
+            <span class="pill" id="inspBubbles">—</span>
+          </div>
           <div class="prev-scroll" id="inspPrevScroll">
             <canvas id="inspCanvas"></canvas>
             <p class="prev-empty" id="inspPrevEmpty">No drawing loaded</p>
+            <div id="inspPaper" hidden></div>
           </div>
           <div class="prev-bar">
-            <select id="inspDoc" title="Drawing"></select>
-            <button id="inspBack">&#9664;</button>
-            <span id="inspPage">&mdash; / &mdash;</span>
-            <button id="inspFwd">&#9654;</button>
+            <select id="inspDoc" title="Drawing" class="v-drawing"></select>
+            <button id="inspBack" class="v-drawing">&#9664;</button>
+            <span id="inspPage" class="v-drawing">&mdash; / &mdash;</span>
+            <button id="inspFwd" class="v-drawing">&#9654;</button>
+            <span id="inspPrevInfo" class="v-record" hidden></span>
             <span class="grow"></span>
             <input type="range" id="inspZoom" min="25" max="300" step="5" value="70" title="Zoom">
             <span id="inspZoomPct">70%</span>
